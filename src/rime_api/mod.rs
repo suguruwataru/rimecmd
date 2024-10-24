@@ -1,5 +1,6 @@
 pub mod key_mappings;
 use crate::Error;
+use serde::Serialize;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::Once;
 
@@ -111,15 +112,15 @@ struct CRimedRimeContext {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct RimeCandidate {
-    text: String,
+    pub text: String,
 }
 
-#[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct RimeMenu {
-    candidates: Vec<RimeCandidate>,
+    pub candidates: Vec<RimeCandidate>,
+    pub page_size: usize,
 }
 
 fn rime_candidate_from_c(c_rime_candidate: &CRimeCandidate) -> RimeCandidate {
@@ -131,7 +132,7 @@ fn rime_candidate_from_c(c_rime_candidate: &CRimeCandidate) -> RimeCandidate {
     }
 }
 
-fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize) -> RimeMenu {
+fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize, menu: &CRimeMenu) -> RimeMenu {
     let mut iterator = CRimeCandidateListIterator {
         ptr: std::ptr::null_mut(),
         index: 0,
@@ -145,6 +146,7 @@ fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize) -> RimeMenu {
         c_candidate_list_begin(c_rime_api, session_id, &mut iterator);
     }
     RimeMenu {
+        page_size: menu.page_size as usize,
         candidates: std::iter::from_fn(|| {
             if 1 == unsafe { c_candidate_list_next(c_rime_api, &mut iterator) } {
                 Some(rime_candidate_from_c(&iterator.candidate))
@@ -324,7 +326,7 @@ impl<'a> RimeSession<'a> {
                     .unwrap()
                     .to_owned()
             },
-            menu: get_rime_menu(self.api.c_rime_api, self.session_id),
+            menu: get_rime_menu(self.api.c_rime_api, self.session_id, &c_context.menu),
         };
         unsafe {
             c_free_context(&mut c_context);

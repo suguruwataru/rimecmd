@@ -1,4 +1,4 @@
-use crate::rime_api::RimeSession;
+use crate::rime_api::{RimeMenu, RimeSession};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -12,6 +12,7 @@ pub enum Response {
     ProcessKey {
         commit_text: Option<String>,
         preview_text: String,
+        menu: RimeMenu,
     },
     Status {
         schema_name: String,
@@ -24,12 +25,10 @@ pub struct RequestHandler<'a> {
 }
 
 impl<'a> RequestHandler<'a> {
-    #[allow(dead_code)]
     pub fn new(rime_session: RimeSession<'a>) -> Self {
         Self { rime_session }
     }
 
-    #[allow(dead_code)]
     pub fn handle_request(&self, request: Request) -> Response {
         match request {
             Request::ProcessKey { keycode, mask } => self.handle_process_key_request(keycode, mask),
@@ -46,9 +45,11 @@ impl<'a> RequestHandler<'a> {
 
     fn handle_process_key_request(&self, keycode: usize, mask: usize) -> Response {
         self.rime_session.process_key(keycode, mask);
+        let context = self.rime_session.get_context();
         Response::ProcessKey {
             commit_text: self.rime_session.get_commit().text,
-            preview_text: self.rime_session.get_context().commit_text_preview,
+            preview_text: context.commit_text_preview,
+            menu: context.menu,
         }
     }
 }
@@ -67,50 +68,65 @@ mod test {
         );
         let rime_session = super::RimeSession::new(&rime_api);
         let request_handler = super::RequestHandler::new(rime_session);
+        let response = request_handler.handle_process_key_request(109 /* m */, 0);
         assert_eq!(
-            serde_json::to_string(&request_handler.handle_process_key_request(109 /* m */, 0))
-                .unwrap(),
-            serde_json::to_string(&super::Response::ProcessKey {
-                commit_text: None,
-                preview_text: "骂".into()
-            })
-            .unwrap(),
+            match response {
+                crate::request_handler::Response::ProcessKey {
+                    preview_text,
+                    commit_text,
+                    menu,
+                } => (preview_text, commit_text, menu.page_size),
+                _ => unreachable!(),
+            },
+            ("骂".into(), None, 5),
         );
+        let response = request_handler.handle_process_key_request(73 /* I */, 0);
         assert_eq!(
-            serde_json::to_string(&request_handler.handle_process_key_request(73 /* I */, 0))
-                .unwrap(),
-            serde_json::to_string(&super::Response::ProcessKey {
-                commit_text: None,
-                preview_text: "骂I".into()
-            })
-            .unwrap(),
+            match response {
+                crate::request_handler::Response::ProcessKey {
+                    preview_text,
+                    commit_text,
+                    menu,
+                } => (preview_text, commit_text, menu.page_size),
+                _ => unreachable!(),
+            },
+            ("骂I".into(), None, 0),
         );
+        let response = request_handler.handle_process_key_request(78 /* N */, 0);
         assert_eq!(
-            serde_json::to_string(&request_handler.handle_process_key_request(78 /* N */, 0))
-                .unwrap(),
-            serde_json::to_string(&super::Response::ProcessKey {
-                commit_text: None,
-                preview_text: "骂IN".into()
-            })
-            .unwrap(),
+            match response {
+                crate::request_handler::Response::ProcessKey {
+                    preview_text,
+                    commit_text,
+                    menu,
+                } => (preview_text, commit_text, menu.page_size),
+                _ => unreachable!(),
+            },
+            ("骂IN".into(), None, 0),
         );
+        let response = request_handler.handle_process_key_request(89 /* Y */, 0);
         assert_eq!(
-            serde_json::to_string(&request_handler.handle_process_key_request(89 /* Y */, 0))
-                .unwrap(),
-            serde_json::to_string(&super::Response::ProcessKey {
-                commit_text: None,
-                preview_text: "骂INY".into()
-            })
-            .unwrap(),
+            match response {
+                crate::request_handler::Response::ProcessKey {
+                    preview_text,
+                    commit_text,
+                    menu,
+                } => (preview_text, commit_text, menu.page_size),
+                _ => unreachable!(),
+            },
+            ("骂INY".into(), None, 0),
         );
+        let response = request_handler.handle_process_key_request(32 /* space */, 0);
         assert_eq!(
-            serde_json::to_string(&request_handler.handle_process_key_request(32 /* space */, 0))
-                .unwrap(),
-            serde_json::to_string(&super::Response::ProcessKey {
-                commit_text: Some("骂INY".into()),
-                preview_text: "".into()
-            })
-            .unwrap(),
+            match response {
+                crate::request_handler::Response::ProcessKey {
+                    preview_text,
+                    commit_text,
+                    menu,
+                } => (preview_text, commit_text, menu.page_size),
+                _ => unreachable!(),
+            },
+            ("".into(), Some("骂INY".into()), 0),
         );
     }
 

@@ -3,6 +3,7 @@ use crate::rime_api::key_mappings::{
     rime_character_to_key_name_map, rime_key_name_to_key_code_map,
 };
 use std::collections::HashMap;
+use std::io::Write;
 use std::os::fd::AsRawFd;
 
 mod input_parser;
@@ -15,8 +16,16 @@ pub struct TerminalInterface<'a> {
     rime_key_name_to_key_code_map: HashMap<&'static str, usize>,
 }
 
+type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
+
+impl From<std::io::Error> for crate::Error<std::io::Error> {
+    fn from(source: std::io::Error) -> Self {
+        Self::External(source)
+    }
+}
+
 impl<'a> TerminalInterface<'a> {
-    pub fn new(request_handler: RequestHandler<'a>) -> Result<Self, crate::Error<std::io::Error>> {
+    pub fn new(request_handler: RequestHandler<'a>) -> Result<Self> {
         Ok(Self {
             tty_file: std::fs::OpenOptions::new()
                 .read(true)
@@ -33,7 +42,7 @@ impl<'a> TerminalInterface<'a> {
         })
     }
 
-    pub fn enter_raw_mode(&mut self) -> Result<(), crate::Error<std::io::Error>> {
+    pub fn enter_raw_mode(&mut self) -> Result<()> {
         let mut raw = unsafe { std::mem::zeroed() };
         unsafe {
             libc::cfmakeraw(&mut raw);
@@ -49,7 +58,14 @@ impl<'a> TerminalInterface<'a> {
         Ok(())
     }
 
-    pub fn exit_raw_mode(&mut self) -> Result<(), crate::Error<std::io::Error>> {
+    pub fn open(&mut self) -> Result<()> {
+        self.enter_raw_mode()?;
+        self.tty_file.write(b"> ")?;
+        self.tty_file.flush()?;
+        Ok(())
+    }
+
+    pub fn exit_raw_mode(&mut self) -> Result<()> {
         if -1
             == unsafe {
                 libc::tcsetattr(
