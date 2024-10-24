@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use crate::poll_data::{PollData, ReadData};
 
-enum Bytes {
+pub enum Bytes {
     StdinBytes(Vec<u8>),
     ServerBytes(Vec<u8>),
 }
@@ -20,11 +20,11 @@ pub struct JsonMode<'a> {
     pub rime_session: RimeSession<'a>,
 }
 
-struct Stdin {
+pub struct Stdin {
     pub stdin: std::io::Stdin,
 }
 
-struct ServerReader {
+pub struct ServerReader {
     pub stream: UnixStream,
 }
 

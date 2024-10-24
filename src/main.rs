@@ -199,14 +199,7 @@ fn rimecmd() -> Result<()> {
         let json_dest = std::io::stdout();
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
-            TerminalJsonMode::new(
-                config,
-                terminal_interface,
-                json_source,
-                json_dest,
-                rime_session,
-            )
-            .main()?;
+            TerminalJsonMode::new(config, terminal_interface).main()?;
             return Ok(());
         } else {
             ServerMode {

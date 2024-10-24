@@ -1,71 +1,98 @@
-use crate::json_request_processor::{JsonRequestProcessor, Outcome, Reply, Request};
-use crate::json_source::JsonSource;
-use crate::key_processor::KeyProcessor;
+use crate::json_mode::{Bytes, ServerReader, Stdin};
+use crate::json_request_processor::{Outcome, Reply, Request};
 use crate::poll_data::{PollData, ReadData};
-use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
 use crate::Result;
-use crate::{Call, Config, Effect};
+use crate::{Config, Effect};
 use std::cell::RefCell;
-use std::io::{Stdin, Write};
+use std::io::{stdin, stdout, Write};
+use std::os::unix::net::UnixStream;
 use std::rc::Rc;
 
-pub struct TerminalJsonMode<'a, O: Write> {
-    config: Config,
-    terminal_interface: Rc<RefCell<TerminalInterface>>,
-    json_source: Rc<RefCell<JsonSource<Stdin>>>,
-    json_dest: O,
-    rime_session: RimeSession<'a>,
+pub enum Data {
+    TerminalRequest(Request),
+    StdinBytes(Vec<u8>),
+    ServerBytes(Vec<u8>),
 }
 
-impl<'a, O: Write> TerminalJsonMode<'a, O> {
-    pub fn new(
-        config: Config,
-        terminal_interface: TerminalInterface,
-        json_source: JsonSource<Stdin>,
-        json_dest: O,
-        rime_session: RimeSession<'a>,
-    ) -> Self {
+impl ReadData<Data> for Stdin {
+    fn read_data(&mut self) -> Result<Data> {
+        let Bytes::StdinBytes(bytes) = ReadData::<Bytes>::read_data(self)? else {
+            unreachable!()
+        };
+        Ok(Data::StdinBytes(bytes))
+    }
+    fn register(&self, poll_data: &mut PollData<Data>) -> Result<()> {
+        poll_data.register(&self.stdin)?;
+        Ok(())
+    }
+}
+
+impl ReadData<Data> for ServerReader {
+    fn read_data(&mut self) -> Result<Data> {
+        let Bytes::ServerBytes(bytes) = ReadData::<Bytes>::read_data(self)? else {
+            unreachable!()
+        };
+        Ok(Data::ServerBytes(bytes))
+    }
+    fn register(&self, poll_data: &mut PollData<Data>) -> Result<()> {
+        poll_data.register(&self.stream)?;
+        Ok(())
+    }
+}
+
+pub struct TerminalJsonMode {
+    config: Config,
+    terminal_interface: Rc<RefCell<TerminalInterface>>,
+}
+
+impl TerminalJsonMode {
+    pub fn new(config: Config, terminal_interface: TerminalInterface) -> Self {
         Self {
             config,
             terminal_interface: Rc::new(RefCell::new(terminal_interface)),
-            json_source: Rc::new(RefCell::new(json_source)),
-            json_dest,
-            rime_session,
         }
     }
 
-    pub fn main(&mut self) -> Result<()> {
-        let json_request_processor = JsonRequestProcessor {
-            rime_session: &self.rime_session,
-            key_processor: KeyProcessor::new(),
-        };
+    pub fn main(mut self) -> Result<()> {
+        match self.main_impl() {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                self.terminal_interface.borrow_mut().close()?;
+                Err(err)
+            }
+        }
+    }
+
+    fn main_impl(&mut self) -> Result<()> {
         self.terminal_interface.borrow_mut().open()?;
-        let mut poll_request = PollData::new(&[
-            Rc::clone(&self.terminal_interface) as Rc<RefCell<dyn ReadData<Request>>>,
-            Rc::clone(&self.json_source) as Rc<RefCell<dyn ReadData<Request>>>,
+        let stream = UnixStream::connect(&self.config.unix_socket)?;
+        let mut server_writer = stream.try_clone()?;
+        let server_reader = Rc::new(RefCell::new(ServerReader { stream }));
+        let stdin = Rc::new(RefCell::new(Stdin { stdin: stdin() }));
+        let mut poll_data = PollData::new(&[
+            Rc::clone(&self.terminal_interface) as Rc<RefCell<dyn ReadData<Data>>>,
+            Rc::clone(&stdin) as Rc<RefCell<dyn ReadData<Data>>>,
+            Rc::clone(&server_reader) as Rc<RefCell<dyn ReadData<Data>>>,
         ])?;
         loop {
-            let request = poll_request.poll();
-            let reply = match request {
-                Ok(Request {
-                    id: _,
-                    call: Call::Stop,
-                }) => {
-                    self.terminal_interface.borrow_mut().close()?;
-                    break;
+            let data = poll_data.poll()?;
+            let reply = match data {
+                Data::TerminalRequest(request) => {
+                    server_writer.write(serde_json::to_string(&request).unwrap().as_bytes())?;
+                    server_writer.flush()?;
+                    continue;
                 }
-                Ok(request) => json_request_processor.process_request(request),
-                Err(err) => match err.try_into() {
-                    Ok(err_outcome) => Reply {
-                        id: None,
-                        outcome: err_outcome,
-                    },
-                    Err(err) => {
-                        self.terminal_interface.borrow_mut().close()?;
-                        return Err(err);
-                    }
-                },
+                Data::StdinBytes(bytes) => {
+                    server_writer.write(&bytes)?;
+                    server_writer.flush()?;
+                    continue;
+                }
+                Data::ServerBytes(bytes) => {
+                    stdout().write(&bytes)?;
+                    stdout().flush()?;
+                    serde_json::from_slice(&bytes)?
+                }
             };
             match reply {
                 Reply {
@@ -74,11 +101,11 @@ impl<'a, O: Write> TerminalJsonMode<'a, O> {
                 } => {
                     if !self.config.continue_mode {
                         self.terminal_interface.borrow_mut().close()?;
-                        writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
+                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
                         break;
                     } else {
                         self.terminal_interface.borrow_mut().remove_ui()?;
-                        writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
+                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
                         self.terminal_interface.borrow_mut().setup_ui()?;
                     }
                 }
@@ -90,13 +117,13 @@ impl<'a, O: Write> TerminalJsonMode<'a, O> {
                         }),
                     ..
                 } => {
-                    writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
+                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
                     self.terminal_interface
                         .borrow_mut()
                         .update_ui(composition, menu)?;
                 }
                 reply => {
-                    writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
+                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
                 }
             }
         }
