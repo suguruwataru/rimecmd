@@ -6,5 +6,5 @@ find src -name '*.c' | xargs clang-format --dry-run
 meson compile -C build/meson
 export RUSTFLAGS='--deny warnings'
 cargo fmt --check
-cargo test
-cargo test -- --ignored --test-threads=1
+cargo test --target-dir build/cargo/pre-commit
+cargo test --target-dir build/cargo/pre-commit -- --ignored --test-threads=1
