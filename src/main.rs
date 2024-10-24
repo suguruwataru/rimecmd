@@ -18,6 +18,7 @@ use crate::server_mode::ServerMode;
 use clap::Parser;
 use error::Error;
 use json_mode::JsonMode;
+use json_request_processor::Request;
 use rime_api::{RimeComposition, RimeMenu};
 use schemars::schema_for;
 use schemars::JsonSchema;
@@ -30,6 +31,7 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 use terminal_json_mode::TerminalJsonMode;
 use terminal_mode::TerminalMode;
+use uuid::Uuid;
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -130,6 +132,9 @@ pub struct Args {
     /// use this flag. It will remove the file if it exists and then start
     /// the server as normal.
     force_start_server: bool,
+    /// Stop the server and exit.
+    #[arg(long)]
+    stop_server: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -243,7 +248,18 @@ fn rimecmd() -> Result<()> {
             _ => return Err(error.into()),
         },
     };
-    let client = Client::new(server_stream);
+    let mut client = Client::new(server_stream);
+    if args.stop_server {
+        client.send_bytes(
+            serde_json::to_string(&Request {
+                id: Uuid::new_v4().into(),
+                call: Call::StopServer,
+            })
+            .unwrap()
+            .as_bytes(),
+        )?;
+        return JsonMode::new(client).main(args.continue_mode);
+    }
     if args.json {
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
