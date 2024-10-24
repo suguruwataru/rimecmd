@@ -1,7 +1,7 @@
 use crate::key_processor::KeyProcessor;
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
-use crate::{Action, Args, Call, Error};
+use crate::{Args, Call, Effect, Error};
 use std::io::{stdout, Write};
 
 pub struct TerminalMode<'a> {
@@ -27,7 +27,7 @@ impl<'a> TerminalMode<'a> {
                 _ => unreachable!(),
             };
             match action {
-                Action::CommitString(commit_string) => {
+                Effect::CommitString(commit_string) => {
                     if !self.args.continue_mode {
                         self.terminal_interface.close().await?;
                         writeln!(stdout(), "{}", commit_string)?;
@@ -38,7 +38,7 @@ impl<'a> TerminalMode<'a> {
                         self.terminal_interface.setup_ui().await?;
                     }
                 }
-                Action::UpdateUi {
+                Effect::UpdateUi {
                     ref menu,
                     ref composition,
                 } => {

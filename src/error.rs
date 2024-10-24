@@ -2,6 +2,7 @@ pub enum Error {
     NonUtf8DataHomePath,
     NotATerminal,
     UnsupportedInput,
+    JsonSourceClosed,
     Io(std::io::Error),
     Json(serde_json::Error),
     Xdg(xdg::BaseDirectoriesError),
@@ -28,7 +29,8 @@ impl std::fmt::Debug for Error {
                 "data directory path with non-UTF-8 characters is not supported"
             ),
             Error::UnsupportedInput => write!(f, "input is not supported"),
-            Error::NotATerminal => write!(f, "not connected to a terminal",),
+            Error::NotATerminal => write!(f, "not connected to a terminal"),
+            Error::JsonSourceClosed => write!(f, "JSON data source is closed"),
             Error::Io(io_err) => io_err.fmt(f),
             Error::Json(json_err) => json_err.fmt(f),
             Error::NulInCString(nul_err) => nul_err.fmt(f),

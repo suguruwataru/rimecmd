@@ -1,5 +1,5 @@
 use crate::rime_api::RimeSession;
-use crate::Action;
+use crate::Effect;
 
 pub struct KeyProcessor;
 
@@ -8,13 +8,13 @@ impl KeyProcessor {
         Self
     }
 
-    pub fn process_key(&self, rime_session: &RimeSession, keycode: usize, mask: usize) -> Action {
+    pub fn process_key(&self, rime_session: &RimeSession, keycode: usize, mask: usize) -> Effect {
         rime_session.process_key(keycode, mask);
         if let Some(commit_string) = rime_session.get_commit().text {
-            Action::CommitString(commit_string)
+            Effect::CommitString(commit_string)
         } else {
             let context = rime_session.get_context();
-            Action::UpdateUi {
+            Effect::UpdateUi {
                 composition: context.composition,
                 menu: context.menu,
             }
@@ -24,7 +24,7 @@ impl KeyProcessor {
 
 #[cfg(test)]
 mod test {
-    use crate::key_processor::{Action, KeyProcessor};
+    use crate::key_processor::{Effect, KeyProcessor};
     use crate::testing_utilities::{temporary_directory_path, LOG_LEVEL};
 
     #[test]
@@ -40,7 +40,7 @@ mod test {
         let report = key_processor.process_key(&rime_session, 109 /* m */, 0);
         assert_eq!(
             match report {
-                Action::UpdateUi { composition, menu } =>
+                Effect::UpdateUi { composition, menu } =>
                     (composition.preedit, menu.candidates.len()),
                 _ => panic!(),
             },
@@ -49,7 +49,7 @@ mod test {
         let report = key_processor.process_key(&rime_session, 73 /* I */, 0);
         assert_eq!(
             match report {
-                Action::UpdateUi { composition, menu } =>
+                Effect::UpdateUi { composition, menu } =>
                     (composition.preedit, menu.candidates.len()),
                 _ => panic!(),
             },
@@ -58,7 +58,7 @@ mod test {
         let response = key_processor.process_key(&rime_session, 78 /* N */, 0);
         assert_eq!(
             match response {
-                Action::UpdateUi { composition, menu } =>
+                Effect::UpdateUi { composition, menu } =>
                     (composition.preedit, menu.candidates.len()),
                 _ => panic!(),
             },
@@ -67,7 +67,7 @@ mod test {
         let report = key_processor.process_key(&rime_session, 89 /* Y */, 0);
         assert_eq!(
             match report {
-                Action::UpdateUi { composition, menu } =>
+                Effect::UpdateUi { composition, menu } =>
                     (composition.preedit, menu.candidates.len()),
                 _ => panic!(),
             },
@@ -76,7 +76,7 @@ mod test {
         let report = key_processor.process_key(&rime_session, 32 /* space */, 0);
         assert_eq!(
             match report {
-                Action::CommitString(commit_string) => commit_string,
+                Effect::CommitString(commit_string) => commit_string,
                 _ => panic!(),
             },
             "骂INY",

@@ -26,14 +26,9 @@ pub enum Call {
     ProcessKey { keycode: usize, mask: usize },
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(
-    rename_all = "snake_case",
-    tag = "action",
-    content = "params",
-    deny_unknown_fields
-)]
-pub enum Action {
+#[derive(Clone, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum Effect {
     CommitString(String),
     UpdateUi {
         composition: RimeComposition,

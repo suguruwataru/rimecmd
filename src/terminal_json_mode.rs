@@ -1,8 +1,8 @@
-use crate::json_request_processor::{JsonRequestProcessor, Reply, Request, Result as ReplyResult};
+use crate::json_request_processor::{JsonRequestProcessor, Outcome as ReplyResult, Reply, Request};
 use crate::key_processor::KeyProcessor;
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
-use crate::{Action, Args, Call, Error};
+use crate::{Args, Call, Effect, Error};
 use std::io::{stdout, Write};
 use tokio::io::AsyncReadExt;
 
@@ -23,7 +23,7 @@ impl JsonStdin {
         loop {
             let count = self.stdin.read(&mut buf).await?;
             if count == 0 {
-                break Err(Error::UnsupportedInput);
+                break Err(Error::JsonSourceClosed);
             }
             json_bytes.extend_from_slice(&buf[0..count]);
             match serde_json::from_slice::<Request>(&json_bytes) {
@@ -55,22 +55,32 @@ impl TerminalJsonMode<'_> {
         self.terminal_interface.open().await?;
         loop {
             let request = tokio::select! {
-                call = self.terminal_interface.next_call() => Request { id: uuid::Uuid::new_v4().into(), call: call? },
-                request = self.json_stdin.next_request() => request?,
+                result = self.terminal_interface.next_call() => result.map(|call| Request { id: uuid::Uuid::new_v4().into(), call: call }),
+                result = self.json_stdin.next_request() => result,
             };
             let reply = match request {
-                Request {
+                Ok(Request {
                     id: _,
                     call: Call::Stop,
-                } => {
+                }) => {
                     self.terminal_interface.close().await?;
                     break;
                 }
-                request => json_request_processor.process_request(request),
+                Ok(request) => json_request_processor.process_request(request),
+                Err(err) => match err.try_into() {
+                    Ok(err_outcome) => Reply {
+                        id: None,
+                        outcome: err_outcome,
+                    },
+                    Err(err) => {
+                        self.terminal_interface.close().await?;
+                        return Err(err);
+                    }
+                },
             };
             match reply {
                 Reply {
-                    result: ReplyResult::Action(Action::CommitString(_)),
+                    outcome: ReplyResult::Effect(Effect::CommitString(_)),
                     ..
                 } => {
                     if !self.args.continue_mode {
@@ -84,8 +94,8 @@ impl TerminalJsonMode<'_> {
                     }
                 }
                 Reply {
-                    result:
-                        ReplyResult::Action(Action::UpdateUi {
+                    outcome:
+                        ReplyResult::Effect(Effect::UpdateUi {
                             ref menu,
                             ref composition,
                         }),
