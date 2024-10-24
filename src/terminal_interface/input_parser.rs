@@ -6,6 +6,7 @@ enum ParserStateImpl {
     Csi,
     Csi1NumParam(usize),
     Completed(Input),
+    // Failed could mean unsupported sequence or invalid sequence
     Failed,
     Pending3ByteUtf8(Vec<u8>),
 }
@@ -25,7 +26,9 @@ impl ParserState {
     pub fn consume_byte(self, byte: u8) -> ConsumeByteResult {
         match self.0.consume_byte(byte) {
             ParserStateImpl::Completed(input) => ConsumeByteResult::Completed(input),
-            ParserStateImpl::Failed => unimplemented!(),
+            ParserStateImpl::Failed => {
+                ConsumeByteResult::Pending(ParserState(ParserStateImpl::Start))
+            }
             pending => ConsumeByteResult::Pending(Self(pending)),
         }
     }
@@ -52,10 +55,15 @@ impl ParserStateImpl {
             ParserStateImpl::Start if byte.is_ascii() => match byte {
                 0x00 => ParserStateImpl::Completed(Input::Nul),
                 0x03 => ParserStateImpl::Completed(Input::Etx),
+                0x04 => ParserStateImpl::Completed(Input::Eot),
+                0x08 => ParserStateImpl::Completed(Input::Bs),
+                0x09 => ParserStateImpl::Completed(Input::Ht),
+                0x0a => ParserStateImpl::Completed(Input::Lf),
                 0x0d => ParserStateImpl::Completed(Input::Cr),
                 0x7f => ParserStateImpl::Completed(Input::Del),
                 0x1b => ParserStateImpl::Esc,
-                _ if byte.is_ascii_control() => unimplemented!(),
+                // All the other ASCII control character are not supported by rimecmd.
+                _ if byte.is_ascii_control() => ParserStateImpl::Failed,
                 _ => ParserStateImpl::Completed(Input::Char(char::from(byte))),
             },
             ParserStateImpl::Esc if byte == 0x5b => ParserStateImpl::Csi,
@@ -97,7 +105,7 @@ impl ParserStateImpl {
                     )
                 }
             }
-            _ => unimplemented!(),
+            _ => ParserStateImpl::Failed,
         }
     }
 }

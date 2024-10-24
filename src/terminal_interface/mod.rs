@@ -44,6 +44,10 @@ pub enum Input {
     Del,
     Nul,
     Etx,
+    Eot,
+    Bs,
+    Ht,
+    Lf,
 }
 
 pub struct TerminalInterface<'a> {
@@ -200,7 +204,7 @@ impl<'a> TerminalInterface<'a> {
         self.tty_file.flush()?;
         loop {
             match self.read_input()? {
-                Input::Etx => {
+                Input::Etx | Input::Eot => {
                     self.cursor_up(height)?;
                     self.carriage_return()?;
                     self.erase_after()?;
@@ -211,7 +215,7 @@ impl<'a> TerminalInterface<'a> {
                     let Some(input_translator::RimeKey { keycode, mask }) =
                         self.input_translator.translate_input(input)
                     else {
-                        unimplemented!()
+                        break Err(crate::Error::UnsupportedInput);
                     };
                     match self.key_processor.process_key(keycode, mask) {
                         Action::UpdateUi { composition, menu } => {

@@ -27,7 +27,23 @@ impl InputTranslator {
 
     pub fn translate_input(&self, input: Input) -> Option<RimeKey> {
         match input {
-            Input::Etx => unreachable!(),
+            Input::Etx | Input::Eot => unreachable!(),
+            Input::Lf => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("Linefeed").unwrap(),
+                mask: 0,
+            }),
+            Input::Ht => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("Tab").unwrap(),
+                mask: 0,
+            }),
+            // Ctrl-Backspace is the behavior on alacritty.
+            Input::Bs => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("BackSpace").unwrap(),
+                mask: *self
+                    .rime_modifier_name_to_modifer_mask
+                    .get("Control")
+                    .unwrap(),
+            }),
             Input::Left => Some(RimeKey {
                 keycode: *self.rime_key_name_to_key_code_map.get("Left").unwrap(),
                 mask: 0,
