@@ -11,7 +11,7 @@ When the project is built the first time, Meson needs to build directory
 meson setup build/meson
 ```
 
-Not that, Meson itself does not require the build directory to be called
+Note that, Meson itself does not require the build directory to be called
 `build/meson`. However, this project requires that. This directory name is
 hardcoded for the later Rust building step (see `build.rs`). Also, `build` is
 added to `.gitignore`.
