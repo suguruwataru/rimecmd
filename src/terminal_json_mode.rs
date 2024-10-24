@@ -1,4 +1,4 @@
-use crate::json_request_processor::{JsonRequestProcessor, Outcome as ReplyResult, Reply, Request};
+use crate::json_request_processor::{JsonRequestProcessor, Outcome, Reply, Request};
 use crate::json_source::JsonSource;
 use crate::key_processor::KeyProcessor;
 use crate::poll_request::{PollRequest, RequestSource};
@@ -70,7 +70,7 @@ impl<'a, I: Read + AsRawFd + 'static, O: Write> TerminalJsonMode<'a, I, O> {
             };
             match reply {
                 Reply {
-                    outcome: ReplyResult::Effect(Effect::CommitString(_)),
+                    outcome: Outcome::Effect(Effect::CommitString(_)),
                     ..
                 } => {
                     if !self.config.continue_mode {
@@ -85,7 +85,7 @@ impl<'a, I: Read + AsRawFd + 'static, O: Write> TerminalJsonMode<'a, I, O> {
                 }
                 Reply {
                     outcome:
-                        ReplyResult::Effect(Effect::UpdateUi {
+                        Outcome::Effect(Effect::UpdateUi {
                             ref menu,
                             ref composition,
                         }),

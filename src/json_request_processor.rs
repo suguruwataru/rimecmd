@@ -11,7 +11,7 @@ pub struct Request {
     pub call: Call,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Reply {
     /// `None` when the reply is caused by terminal interaction or error
@@ -25,7 +25,7 @@ pub struct Reply {
     pub outcome: Outcome,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Outcome {
     SchemaName(String),

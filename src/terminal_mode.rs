@@ -1,8 +1,10 @@
-use crate::key_processor::KeyProcessor;
+use crate::json_request_processor::{Outcome, Reply, Request};
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
 use crate::{Call, Config, Effect, Error};
-use std::io::{stdout, Write};
+use std::io::{stdout, Read, Write};
+use std::os::unix::net::UnixStream;
+use uuid::Uuid;
 
 pub struct TerminalMode<'a> {
     pub config: Config,
@@ -12,13 +14,50 @@ pub struct TerminalMode<'a> {
 
 impl<'a> TerminalMode<'a> {
     pub fn main(mut self) -> Result<(), Error> {
-        let key_processor = KeyProcessor::new();
+        match self.main_impl() {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                self.terminal_interface.close()?;
+                Err(err)
+            }
+        }
+    }
+
+    fn main_impl(&mut self) -> Result<(), Error> {
         self.terminal_interface.open()?;
+        let mut stream = UnixStream::connect(&self.config.unix_socket)?;
         loop {
             let call = self.terminal_interface.next_call()?;
-            let action = match call {
-                Call::ProcessKey { keycode, mask } => {
-                    key_processor.process_key(&self.rime_session, keycode, mask)
+            let reply = match call {
+                call @ Call::ProcessKey { .. } => {
+                    let mut buf = [0; 1024];
+                    let mut json_bytes = vec![];
+                    stream.write(
+                        serde_json::to_string(&Request {
+                            id: Uuid::new_v4().into(),
+                            call,
+                        })
+                        .unwrap()
+                        .as_bytes(),
+                    )?;
+                    stream.flush()?;
+                    loop {
+                        let count = stream.read(&mut buf)?;
+                        if count == 0 {
+                            return Err(Error::ServerClosedConnection);
+                        }
+                        json_bytes.extend_from_slice(&buf[0..count]);
+                        match serde_json::from_slice::<Reply>(&json_bytes) {
+                            Ok(reply) => break reply,
+                            Err(error) => {
+                                if error.is_eof() {
+                                    continue;
+                                } else {
+                                    return Err(error.into());
+                                }
+                            }
+                        }
+                    }
                 }
                 Call::Stop => {
                     self.terminal_interface.close()?;
@@ -26,11 +65,14 @@ impl<'a> TerminalMode<'a> {
                 }
                 _ => unreachable!(),
             };
-            match action {
-                Effect::CommitString(commit_string) => {
+            match reply {
+                Reply {
+                    outcome: Outcome::Effect(Effect::CommitString(commit_string)),
+                    ..
+                } => {
                     if !self.config.continue_mode {
-                        self.terminal_interface.close()?;
                         writeln!(stdout(), "{}", commit_string)?;
+                        self.terminal_interface.close()?;
                         break;
                     } else {
                         self.terminal_interface.remove_ui()?;
@@ -38,12 +80,17 @@ impl<'a> TerminalMode<'a> {
                         self.terminal_interface.setup_ui()?;
                     }
                 }
-                Effect::UpdateUi {
-                    ref menu,
-                    ref composition,
+                Reply {
+                    outcome:
+                        Outcome::Effect(Effect::UpdateUi {
+                            ref menu,
+                            ref composition,
+                        }),
+                    ..
                 } => {
                     self.terminal_interface.update_ui(composition, menu)?;
                 }
+                _ => (),
             }
         }
         Ok(())

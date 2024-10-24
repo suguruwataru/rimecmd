@@ -1,21 +1,20 @@
-use crate::json_request_processor::{JsonRequestProcessor, Outcome as ReplyResult, Reply, Request};
+use crate::json_request_processor::{JsonRequestProcessor, Reply, Request};
 use crate::json_source::JsonSource;
 use crate::key_processor::KeyProcessor;
 use crate::poll_request::RequestSource;
 use crate::rime_api::RimeSession;
+use crate::Call;
 use crate::Result;
-use crate::{Call, Config, Effect};
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 
-pub struct JsonMode<'a, I: Read + AsRawFd, O: Write> {
-    pub config: Config,
+pub struct ServerMode<'a, I: Read + AsRawFd, O: Write> {
     pub json_source: JsonSource<I>,
     pub json_dest: O,
     pub rime_session: RimeSession<'a>,
 }
 
-impl<'a, I: Read + AsRawFd, O: Write> JsonMode<'a, I, O> {
+impl<'a, I: Read + AsRawFd, O: Write> ServerMode<'a, I, O> {
     pub fn main(&mut self) -> Result<()> {
         let json_request_processor = JsonRequestProcessor {
             rime_session: &self.rime_session,
@@ -41,22 +40,9 @@ impl<'a, I: Read + AsRawFd, O: Write> JsonMode<'a, I, O> {
                     }
                 },
             };
-            match reply {
-                Reply {
-                    outcome: ReplyResult::Effect(Effect::CommitString(_)),
-                    ..
-                } => {
-                    if !self.config.continue_mode {
-                        writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
-                        break;
-                    } else {
-                        writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
-                    }
-                }
-                reply => {
-                    writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
-                }
-            }
+            self.json_dest
+                .write(serde_json::to_string(&reply)?.as_bytes())?;
+            self.json_dest.flush()?;
         }
         Ok(())
     }

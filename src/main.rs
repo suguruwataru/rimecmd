@@ -2,23 +2,23 @@
 mod testing_utilities;
 
 mod error;
-mod json_mode;
 mod json_request_processor;
 mod json_source;
 mod key_processor;
 #[allow(dead_code)]
 mod rime_api;
+mod server_mode;
 mod terminal_interface;
 mod terminal_json_mode;
 mod terminal_mode;
 use error::Error;
 type Result<T> = std::result::Result<T, Error>;
 
-use json_mode::JsonMode;
 use json_source::JsonSource;
 use rime_api::{RimeComposition, RimeMenu};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use server_mode::ServerMode;
 use std::path::PathBuf;
 use terminal_json_mode::TerminalJsonMode;
 use terminal_mode::TerminalMode;
@@ -38,7 +38,7 @@ pub enum Call {
     ProcessKey { keycode: usize, mask: usize },
 }
 
-#[derive(Clone, Serialize, JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Effect {
     CommitString(String),
@@ -174,8 +174,7 @@ fn rimecmd() -> Result<()> {
                         return ();
                     }
                 };
-                JsonMode {
-                    config,
+                ServerMode {
                     json_source: JsonSource::new(input_stream),
                     json_dest: stream,
                     rime_session,
@@ -207,8 +206,7 @@ fn rimecmd() -> Result<()> {
             .main()?;
             return Ok(());
         } else {
-            JsonMode {
-                config,
+            ServerMode {
                 json_source,
                 json_dest,
                 rime_session,
@@ -228,8 +226,7 @@ fn rimecmd() -> Result<()> {
             .main()?;
         }
         Err(Error::NotATerminal) => {
-            JsonMode {
-                config,
+            ServerMode {
                 json_source: JsonSource::new(std::io::stdin()),
                 json_dest: std::io::stdout(),
                 rime_session,
@@ -246,6 +243,9 @@ fn rimecmd() -> Result<()> {
 fn main() -> ExitCode {
     match rimecmd() {
         Ok(_) => ExitCode::SUCCESS,
-        _ => ExitCode::FAILURE,
+        Err(err) => {
+            eprintln!("{:?}", err);
+            ExitCode::FAILURE
+        }
     }
 }
