@@ -60,6 +60,7 @@ pub struct TerminalInterface {
     tty_file: std::fs::File,
     original_mode: Option<libc::termios>,
     input_translator: input_translator::InputTranslator,
+    input_buffer: Vec<Input>,
 }
 
 type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
@@ -67,6 +68,7 @@ type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
 impl TerminalInterface {
     pub fn new() -> Result<Self> {
         Ok(Self {
+            input_buffer: vec![],
             tty_file: std::fs::OpenOptions::new()
                 .read(true)
                 .write(true)
@@ -172,17 +174,23 @@ impl TerminalInterface {
         }
         self.set_character_attribute(CharacterAttribute::Normal)?;
         self.erase_line_to_right()?;
-        Ok(final_cursor_position
-            .unwrap_or(self.get_cursor_position()?)
-            .1)
+        Ok(if let Some(final_cursor_position) = final_cursor_position {
+            final_cursor_position.1
+        } else {
+            self.get_cursor_position()?.1
+        })
     }
 
     fn get_cursor_position(&mut self) -> Result<(NonZeroUsize, NonZeroUsize)> {
         self.tty_file.write(b"\x1b[6n")?;
-        let Input::CursorPositionReport { row, col } = self.read_input()? else {
-            todo!()
-        };
-        Ok((row, col))
+        loop {
+            let input = self.read_input()?;
+            if let Input::CursorPositionReport { row, col } = input {
+                break Ok((row, col));
+            } else {
+                self.input_buffer.push(input);
+            }
+        }
     }
 
     fn set_cursor_position(&mut self, (row, col): (NonZeroUsize, NonZeroUsize)) -> Result<()> {
@@ -197,7 +205,11 @@ impl TerminalInterface {
     }
 
     pub fn next_call(&mut self) -> Result<Call> {
-        match self.read_input()? {
+        let input = match self.input_buffer.pop() {
+            Some(input) => input,
+            None => self.read_input()?,
+        };
+        match input {
             Input::Etx | Input::Eot => Ok(Call::Stop),
             input => {
                 let Some(input_translator::RimeKey { keycode, mask }) =
