@@ -83,9 +83,11 @@ impl TerminalInterface {
     }
 
     async fn read_input(&mut self) -> Result<Input> {
+        let mut buf = [0u8; 1];
         let mut input_parser_state = input_parser::ParserState::new();
         loop {
-            let byte = self.tty_file.read_u8().await?;
+            self.tty_file.read(&mut buf).await?;
+            let byte = buf[0];
             match input_parser_state.consume_byte(byte) {
                 input_parser::ConsumeByteResult::Pending(new_state) => {
                     input_parser_state = new_state
