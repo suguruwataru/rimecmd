@@ -48,6 +48,7 @@ impl ParserStateImpl {
     fn consume_byte(self, byte: u8) -> Self {
         match self {
             ParserStateImpl::Start if byte.is_ascii() => match byte {
+                0x00 => ParserStateImpl::Completed(Input::Nul),
                 0x03 => ParserStateImpl::Completed(Input::Etx),
                 0x0d => ParserStateImpl::Completed(Input::Cr),
                 0x7f => ParserStateImpl::Completed(Input::Del),
@@ -92,6 +93,15 @@ mod test {
     fn ascii_del() {
         // The ascii code sent by backspace key
         if let ParserStateImpl::Completed(Input::Del) = ParserStateImpl::Start.consume_byte(0x7f) {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn ascii_nul() {
+        // The ascii code sent by Ctrl-`
+        if let ParserStateImpl::Completed(Input::Nul) = ParserStateImpl::Start.consume_byte(0x00) {
         } else {
             panic!();
         }

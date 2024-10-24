@@ -7,7 +7,6 @@ use std::os::fd::AsRawFd;
 mod input_parser;
 mod input_translator;
 
-#[allow(dead_code)]
 pub enum Input {
     Char(char),
     Cr,
@@ -98,6 +97,11 @@ impl<'a> TerminalInterface<'a> {
                                 menu.candidates.iter().take(menu.page_size).enumerate()
                             {
                                 write!(self.tty_file, "{}. {}", index + 1, candidate.text)?;
+                                if let Some(comment) = candidate.comment.as_ref() {
+                                    // The escape codes here give the comment faint color,
+                                    // and then revert the color back to default.
+                                    write!(self.tty_file, " \x1b[2m{}\x1b[0m", comment)?;
+                                }
                                 self.erase_line_to_right()?;
                                 self.tty_file.write(b"\r\n")?;
                             }

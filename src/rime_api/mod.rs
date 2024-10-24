@@ -151,6 +151,7 @@ struct CRimecmdRimeContext {
 #[derive(Debug)]
 pub struct RimeCandidate {
     pub text: String,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug)]
@@ -165,6 +166,12 @@ fn rime_candidate_from_c(c_rime_candidate: &CRimeCandidate) -> RimeCandidate {
             .to_owned()
             .into_string()
             .unwrap(),
+        comment: (!c_rime_candidate.comment.is_null()).then(|| {
+            unsafe { CStr::from_ptr(c_rime_candidate.comment) }
+                .to_owned()
+                .into_string()
+                .unwrap()
+        }),
     }
 }
 
@@ -598,5 +605,25 @@ mod test {
         assert_eq!("mi", rime_session.get_context().composition.preedit);
         rime_session.process_key(0xff08 /* Backspace */, 0);
         assert_eq!("m", rime_session.get_context().composition.preedit);
+    }
+
+    #[test]
+    #[ignore = "not thread safe"]
+    fn process_ctrl_grave() {
+        let rime_api = crate::rime_api::RimeApi::new(
+            temporary_directory_path(),
+            "./test_shared_data",
+            LOG_LEVEL,
+        );
+        let rime_session = crate::rime_api::RimeSession::new(&rime_api);
+        rime_session.process_key(96 /* ` */, 1 << 2 /* Control */);
+        rime_session.process_key(50 /* 2 */, 0);
+        let context = rime_session.get_context();
+        assert_eq!(context.composition.preedit, "〔方案選單〕");
+        assert_eq!(context.menu.candidates[1].text, "中文");
+        assert_eq!(
+            context.menu.candidates[1].comment.clone().unwrap(),
+            "→ 西文"
+        );
     }
 }

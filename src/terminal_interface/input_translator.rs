@@ -1,12 +1,14 @@
 use super::Input;
 use crate::rime_api::key_mappings::{
     rime_character_to_key_name_map, rime_key_name_to_key_code_map,
+    rime_modifier_name_to_modifier_mask,
 };
 use std::collections::HashMap;
 
 pub struct InputTranslator {
     rime_character_to_key_name_map: HashMap<char, &'static str>,
     rime_key_name_to_key_code_map: HashMap<&'static str, usize>,
+    rime_modifier_name_to_modifer_mask: HashMap<&'static str, usize>,
 }
 
 pub struct RimeKey {
@@ -19,6 +21,7 @@ impl InputTranslator {
         Self {
             rime_key_name_to_key_code_map: rime_key_name_to_key_code_map(),
             rime_character_to_key_name_map: rime_character_to_key_name_map(),
+            rime_modifier_name_to_modifer_mask: rime_modifier_name_to_modifier_mask(),
         }
     }
 
@@ -29,7 +32,21 @@ impl InputTranslator {
                 keycode: *self.rime_key_name_to_key_code_map.get("Return").unwrap(),
                 mask: 0,
             }),
-            Input::Nul => unimplemented!(),
+            // In a common terminal, nul can be sent in various cases: Ctrl-`, Ctrl-@, Ctrl-2.
+            // If I remember correctly, there are more.
+            // Unfortunately, there isn't really a standard or documentation for this.
+            // Since Ctrl-` is the most relevant key binding for rime, nul is translated to it.
+            Input::Nul => {
+                let key_name = self.rime_character_to_key_name_map.get(&'`').unwrap();
+                let keycode = self.rime_key_name_to_key_code_map.get(key_name).unwrap();
+                Some(RimeKey {
+                    keycode: *keycode,
+                    mask: *self
+                        .rime_modifier_name_to_modifer_mask
+                        .get("Control")
+                        .unwrap(),
+                })
+            }
             Input::Del => Some(RimeKey {
                 keycode: *self.rime_key_name_to_key_code_map.get("BackSpace").unwrap(),
                 mask: 0,

@@ -2,6 +2,28 @@
 /// commit 5f5a688.
 use std::collections::HashMap;
 
+pub fn rime_modifier_name_to_modifier_mask() -> HashMap<&'static str, usize> {
+    HashMap::from([
+        ("Shift", 1 << 0),
+        ("Lock", 1 << 1),
+        ("Control", 1 << 2),
+        ("Alt", 1 << 3),
+        ("Mod2", 1 << 4),
+        ("Mod3", 1 << 5),
+        ("Mod4", 1 << 6),
+        ("Mod5", 1 << 7),
+        ("Button1", 1 << 8),
+        ("Button2", 1 << 9),
+        ("Button3", 1 << 10),
+        ("Button4", 1 << 11),
+        ("Button5", 1 << 12),
+        ("Super", 1 << 26),
+        ("Hyper", 1 << 27),
+        ("Meta", 1 << 28),
+        ("Release", 1 << 30),
+    ])
+}
+
 /// Create a mapping from ASCII printable characters to key names used by
 /// rime. This is created from rime's key code to key name mapping. For
 /// ASCII characters, key codes are the same as the corresponding character's
