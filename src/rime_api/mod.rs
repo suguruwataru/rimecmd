@@ -158,6 +158,9 @@ pub struct RimeCandidate {
 pub struct RimeMenu {
     pub candidates: Vec<RimeCandidate>,
     pub page_size: usize,
+    pub page_no: usize,
+    pub highlighted_candidate_index: usize,
+    pub is_last_page: bool,
 }
 
 fn rime_candidate_from_c(c_rime_candidate: &CRimeCandidate) -> RimeCandidate {
@@ -190,6 +193,9 @@ fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize, menu: &CRimeMenu)
     }
     RimeMenu {
         page_size: menu.page_size as usize,
+        page_no: menu.page_no as usize,
+        is_last_page: menu.is_last_page == 1,
+        highlighted_candidate_index: menu.highlighted_candidate_index as usize,
         candidates: std::iter::from_fn(|| {
             if 1 == unsafe { c_candidate_list_next(c_rime_api, &mut iterator) } {
                 Some(rime_candidate_from_c(&iterator.candidate))

@@ -96,10 +96,19 @@ impl<'a> TerminalInterface<'a> {
                             for (index, candidate) in
                                 menu.candidates.iter().take(menu.page_size).enumerate()
                             {
-                                write!(self.tty_file, "{}. {}", index + 1, candidate.text)?;
+                                if index == menu.highlighted_candidate_index {
+                                    // The escape code here gives the index inverted color,
+                                    write!(
+                                        self.tty_file,
+                                        "\x1b[7m{}.\x1b[0m {}",
+                                        index + 1,
+                                        candidate.text
+                                    )?;
+                                } else {
+                                    write!(self.tty_file, "{}. {}", index + 1, candidate.text)?;
+                                }
                                 if let Some(comment) = candidate.comment.as_ref() {
-                                    // The escape codes here give the comment faint color,
-                                    // and then revert the color back to default.
+                                    // The escape code here gives the comment faint color,
                                     write!(self.tty_file, " \x1b[2m{}\x1b[0m", comment)?;
                                 }
                                 self.erase_line_to_right()?;
