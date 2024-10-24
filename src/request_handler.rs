@@ -16,6 +16,7 @@ pub enum Response {
     Status {
         schema_name: String,
     },
+    CharactorNotSupported(char),
 }
 
 pub struct RequestHandler<'a> {
@@ -54,19 +55,14 @@ impl<'a> RequestHandler<'a> {
 
 #[cfg(test)]
 mod test {
-    fn temporary_directory_path() -> String {
-        format!(
-            "temporary_test_directories/user_data_home_{:08X}",
-            rand::random::<u32>()
-        )
-    }
+    use crate::testing_utilities::{temporary_directory_path, LOG_LEVEL};
 
     #[test]
     fn get_commit() {
         let rime_api = crate::rime_api::RimeApi::new(
             temporary_directory_path(),
             "./test_shared_data",
-            crate::rime_api::LogLevel::OFF,
+            LOG_LEVEL,
         );
         let rime_session = super::RimeSession::new(&rime_api);
         let request_handler = super::RequestHandler::new(rime_session);
@@ -122,7 +118,7 @@ mod test {
         let rime_api = crate::rime_api::RimeApi::new(
             temporary_directory_path(),
             "./test_shared_data",
-            crate::rime_api::LogLevel::OFF,
+            LOG_LEVEL,
         );
         let rime_session = super::RimeSession::new(&rime_api);
         let request_handler = super::RequestHandler::new(rime_session);

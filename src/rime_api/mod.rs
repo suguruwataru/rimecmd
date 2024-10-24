@@ -1,3 +1,4 @@
+pub mod key_mappings;
 use crate::Error;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::Once;
@@ -223,18 +224,6 @@ pub struct RimeStatus {
     pub is_ascii_punct: bool,
 }
 
-pub struct RimeApi {
-    c_rime_api: *mut CRimeApi,
-    _user_data_dir: std::boxed::Box<std::ffi::CString>,
-    _shared_data_dir: std::boxed::Box<std::ffi::CString>,
-}
-
-impl Drop for RimeApi {
-    fn drop(&mut self) {
-        unsafe { c_destory_rime_api(self.c_rime_api) };
-    }
-}
-
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct RimeSchema {
@@ -417,6 +406,18 @@ impl Drop for RimeSession<'_> {
     }
 }
 
+pub struct RimeApi {
+    c_rime_api: *mut CRimeApi,
+    _user_data_dir: std::boxed::Box<std::ffi::CString>,
+    _shared_data_dir: std::boxed::Box<std::ffi::CString>,
+}
+
+impl Drop for RimeApi {
+    fn drop(&mut self) {
+        unsafe { c_destory_rime_api(self.c_rime_api) };
+    }
+}
+
 impl RimeApi {
     /// * `log_level` - will only be effective this first time this is run.
     /// See the comment in the definition of `c_setup_rime_api_once`.
@@ -503,6 +504,7 @@ impl RimeApi {
 }
 
 #[allow(dead_code)]
+#[derive(Copy, Clone)]
 pub enum LogLevel {
     INFO,
     WARNING,

@@ -5,6 +5,10 @@ mod error;
 use error::Error;
 
 mod request_handler;
+mod terminal_interface;
+
+#[cfg(test)]
+mod testing_utilities;
 
 fn main() {
     let data_home = xdg::BaseDirectories::with_prefix("rimed")
