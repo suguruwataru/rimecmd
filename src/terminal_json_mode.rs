@@ -5,14 +5,14 @@ use crate::poll_request::{PollRequest, RequestSource};
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
 use crate::Result;
-use crate::{Args, Call, Effect};
+use crate::{Call, Config, Effect};
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 use std::rc::Rc;
 
 pub struct TerminalJsonMode<'a, I: Read + AsRawFd, O: Write> {
-    args: Args,
+    config: Config,
     terminal_interface: Rc<RefCell<TerminalInterface>>,
     json_source: Rc<RefCell<JsonSource<I>>>,
     json_dest: O,
@@ -21,14 +21,14 @@ pub struct TerminalJsonMode<'a, I: Read + AsRawFd, O: Write> {
 
 impl<'a, I: Read + AsRawFd + 'static, O: Write> TerminalJsonMode<'a, I, O> {
     pub fn new(
-        args: Args,
+        config: Config,
         terminal_interface: TerminalInterface,
         json_source: JsonSource<I>,
         json_dest: O,
         rime_session: RimeSession<'a>,
     ) -> Self {
         Self {
-            args,
+            config,
             terminal_interface: Rc::new(RefCell::new(terminal_interface)),
             json_source: Rc::new(RefCell::new(json_source)),
             json_dest,
@@ -73,7 +73,7 @@ impl<'a, I: Read + AsRawFd + 'static, O: Write> TerminalJsonMode<'a, I, O> {
                     outcome: ReplyResult::Effect(Effect::CommitString(_)),
                     ..
                 } => {
-                    if !self.args.continue_mode {
+                    if !self.config.continue_mode {
                         self.terminal_interface.borrow_mut().close()?;
                         writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
                         break;

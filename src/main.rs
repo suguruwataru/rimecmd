@@ -61,7 +61,7 @@ enum PrintJsonSchemaFor {
     Request,
 }
 
-#[derive(Clone, Parser)]
+#[derive(Parser)]
 #[command(version, about)]
 pub struct Args {
     #[arg(long, short = 'l', value_enum, default_value = "none")]
@@ -96,6 +96,37 @@ pub struct Args {
     server: bool,
 }
 
+#[derive(Clone, Serialize)]
+pub struct Config {
+    pub continue_mode: bool,
+    pub unix_socket: PathBuf,
+    pub data_home: PathBuf,
+    pub rime_log_level: rime_api::LogLevel,
+}
+
+impl TryFrom<&Args> for Config {
+    type Error = Error;
+    fn try_from(args: &Args) -> Result<Self> {
+        let xdg_directories = xdg::BaseDirectories::with_prefix("rimecmd")?;
+        let unix_socket = if let Some(ref socket_path) = args.unix_socket {
+            PathBuf::from(socket_path)
+        } else {
+            if let Ok(runtime_directory) = xdg_directories.create_runtime_directory("socket") {
+                runtime_directory
+            } else {
+                std::env::temp_dir()
+            }
+            .join("rimecmd.sock")
+        };
+        Ok(Self {
+            continue_mode: args.continue_mode,
+            unix_socket,
+            data_home: xdg_directories.get_data_home().into(),
+            rime_log_level: args.rime_log_level,
+        })
+    }
+}
+
 fn rimecmd() -> Result<()> {
     let args = Args::parse();
     match args.json_schema {
@@ -116,20 +147,9 @@ fn rimecmd() -> Result<()> {
         }
         None => (),
     }
-    let xdg_directories = xdg::BaseDirectories::with_prefix("rimecmd")?;
-    let data_home = xdg_directories.get_data_home();
-    let socket_path = if let Some(ref socket_path) = args.unix_socket {
-        PathBuf::from(socket_path)
-    } else {
-        if let Ok(runtime_directory) = xdg_directories.create_runtime_directory("socket") {
-            runtime_directory
-        } else {
-            std::env::temp_dir()
-        }
-        .join("rimecmd.sock")
-    };
+    let config = Config::try_from(&args)?;
     if args.server {
-        let listener = UnixListener::bind(&socket_path).unwrap();
+        let listener = UnixListener::bind(&config.unix_socket).unwrap();
         let (error_sender, error_receiver) = channel();
         let error_sender = Arc::new(Mutex::new(error_sender));
         thread::spawn(move || loop {
@@ -138,12 +158,14 @@ fn rimecmd() -> Result<()> {
         });
         for stream in listener.incoming() {
             let stream = stream?;
-            let data_home = data_home.clone();
-            let args = args.clone();
+            let config = config.clone();
             let error_sender = Arc::clone(&error_sender);
             thread::spawn(move || {
-                let rime_api =
-                    rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
+                let rime_api = rime_api::RimeApi::new(
+                    &config.data_home,
+                    "/usr/share/rime-data",
+                    config.rime_log_level,
+                );
                 let rime_session = rime_api::RimeSession::new(&rime_api);
                 let input_stream = match stream.try_clone() {
                     Ok(stream) => stream,
@@ -152,31 +174,46 @@ fn rimecmd() -> Result<()> {
                         return ();
                     }
                 };
-                JsonMode::new(args, JsonSource::new(input_stream), stream, rime_session)
-                    .main()
-                    .unwrap_or_else(|err| error_sender.lock().unwrap().send(err).unwrap());
+                JsonMode {
+                    config,
+                    json_source: JsonSource::new(input_stream),
+                    json_dest: stream,
+                    rime_session,
+                }
+                .main()
+                .unwrap_or_else(|err| error_sender.lock().unwrap().send(err).unwrap());
             });
         }
         return Ok(());
     }
-    let rime_api = rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
+    let rime_api = rime_api::RimeApi::new(
+        &config.data_home,
+        "/usr/share/rime-data",
+        args.rime_log_level,
+    );
     let rime_session = rime_api::RimeSession::new(&rime_api);
     if args.json {
-        let json_stdin = JsonSource::new(std::io::stdin());
+        let json_source = JsonSource::new(std::io::stdin());
         let json_dest = std::io::stdout();
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
             TerminalJsonMode::new(
-                args,
+                config,
                 terminal_interface,
-                json_stdin,
+                json_source,
                 json_dest,
                 rime_session,
             )
             .main()?;
             return Ok(());
         } else {
-            JsonMode::new(args, json_stdin, json_dest, rime_session).main()?;
+            JsonMode {
+                config,
+                json_source,
+                json_dest,
+                rime_session,
+            }
+            .main()?;
             return Ok(());
         };
     }
@@ -184,19 +221,19 @@ fn rimecmd() -> Result<()> {
     match maybe_terminal_interface {
         Ok(terminal_interface) => {
             TerminalMode {
-                args,
+                config,
                 terminal_interface,
                 rime_session,
             }
             .main()?;
         }
         Err(Error::NotATerminal) => {
-            JsonMode::new(
-                args,
-                JsonSource::new(std::io::stdin()),
-                std::io::stdout(),
+            JsonMode {
+                config,
+                json_source: JsonSource::new(std::io::stdin()),
+                json_dest: std::io::stdout(),
                 rime_session,
-            )
+            }
             .main()?;
         }
         err => {

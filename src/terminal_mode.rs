@@ -1,11 +1,11 @@
 use crate::key_processor::KeyProcessor;
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
-use crate::{Args, Call, Effect, Error};
+use crate::{Call, Config, Effect, Error};
 use std::io::{stdout, Write};
 
 pub struct TerminalMode<'a> {
-    pub args: Args,
+    pub config: Config,
     pub terminal_interface: TerminalInterface,
     pub rime_session: RimeSession<'a>,
 }
@@ -28,7 +28,7 @@ impl<'a> TerminalMode<'a> {
             };
             match action {
                 Effect::CommitString(commit_string) => {
-                    if !self.args.continue_mode {
+                    if !self.config.continue_mode {
                         self.terminal_interface.close()?;
                         writeln!(stdout(), "{}", commit_string)?;
                         break;

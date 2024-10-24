@@ -558,7 +558,7 @@ impl RimeApi {
     }
 }
 
-#[derive(Copy, Clone, clap::ValueEnum)]
+#[derive(Copy, Clone, clap::ValueEnum, Serialize)]
 pub enum LogLevel {
     Info,
     Warning,

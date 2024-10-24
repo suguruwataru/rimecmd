@@ -4,32 +4,18 @@ use crate::key_processor::KeyProcessor;
 use crate::poll_request::RequestSource;
 use crate::rime_api::RimeSession;
 use crate::Result;
-use crate::{Args, Call, Effect};
+use crate::{Call, Config, Effect};
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 
 pub struct JsonMode<'a, I: Read + AsRawFd, O: Write> {
-    pub args: Args,
+    pub config: Config,
     pub json_source: JsonSource<I>,
     pub json_dest: O,
     pub rime_session: RimeSession<'a>,
 }
 
 impl<'a, I: Read + AsRawFd, O: Write> JsonMode<'a, I, O> {
-    pub fn new(
-        args: Args,
-        json_source: JsonSource<I>,
-        json_dest: O,
-        rime_session: RimeSession<'a>,
-    ) -> Self {
-        Self {
-            args,
-            json_source,
-            json_dest,
-            rime_session,
-        }
-    }
-
     pub fn main(&mut self) -> Result<()> {
         let json_request_processor = JsonRequestProcessor {
             rime_session: &self.rime_session,
@@ -60,7 +46,7 @@ impl<'a, I: Read + AsRawFd, O: Write> JsonMode<'a, I, O> {
                     outcome: ReplyResult::Effect(Effect::CommitString(_)),
                     ..
                 } => {
-                    if !self.args.continue_mode {
+                    if !self.config.continue_mode {
                         writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
                         break;
                     } else {
