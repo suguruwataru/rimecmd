@@ -76,8 +76,14 @@ enum PrintJsonSchemaFor {
 #[derive(Parser)]
 #[command(version, about)]
 pub struct Args {
+    /// A path to the file where the client duplicates requests to.
+    ///
+    /// Used for debugging.
+    #[arg(short, long = "duplicate-requests")]
+    duplicate_requests: Option<PathBuf>,
     /// A path to the file where the server's stderr gets redirected to.
     ///
+    /// Used for debugging.
     /// Ignored unless `--force-restart-server` is used.
     #[arg(short, long = "redirect-server-stderr")]
     redirect_server_stderr: Option<PathBuf>,
@@ -89,7 +95,7 @@ pub struct Args {
     #[arg(long)]
     /// Use JSON for input/output.
     ///
-    /// This is the default behavior
+    /// This is the default behavior when the program is not connected to a terminal.
     /// stdin and stdout is used, and input/output using the terminal is turned
     /// off.
     json: bool,
@@ -97,9 +103,9 @@ pub struct Args {
     /// Use the terminal for interaction.
     ///
     /// This is the default behavior when this program is run on a terminal.
-    /// However, even in this case, when JSON is used, by default, terminal
-    /// interaction will be turned off. This switch lets this program also
-    /// use terminal interaction even in this case.
+    /// However, even in this case, when `--json` is used, by default, terminal
+    /// interaction will be turned off. This switch lets this program
+    /// use terminal interaction along with `--json`.
     tty: bool,
     #[arg(short, long = "continue")]
     /// Do not exit after committing once, instead, continue to process input.
@@ -269,7 +275,18 @@ fn rimecmd() -> Result<()> {
             _ => return Err(error.into()),
         },
     };
-    let mut client = Client::new(server_stream);
+    let mut client = Client::new(
+        server_stream,
+        match args.duplicate_requests {
+            Some(path) => Some(
+                std::fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(path)?,
+            ),
+            None => None,
+        },
+    );
     if args.stop_server {
         client.send_bytes(
             serde_json::to_string(&Request {

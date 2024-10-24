@@ -121,7 +121,7 @@ impl RimeConfig {
 impl Drop for RimeConfig {
     fn drop(&mut self) {
         // This Rime API function returns False only when the passed
-        // in point is nullptr or points to an uninitialed structure.
+        // in point is nullptr or points to an uninitialized structure.
         // It's impossible with the Rust setup written here.
         // Therefore, the return value can be safely disgarded here.
         unsafe {
@@ -269,8 +269,7 @@ pub struct RimeContext {
     pub menu: RimeMenu,
 }
 
-// The first fields make it the proper way of declaring an opaque C type as
-// documented in Rustonomicon.
+// The proper way of declaring an opaque C type as documented in Rustonomicon.
 #[repr(C)]
 struct CRimeApi {
     data: [u8; 0],

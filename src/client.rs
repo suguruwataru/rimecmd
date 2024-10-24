@@ -1,12 +1,14 @@
 use crate::json_request_processor::Reply;
 use crate::poll_data::{PollData, ReadData};
 use crate::Result;
+use std::fs::File;
 use std::io::{Read, Write};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 
 pub struct Client {
     server_stream: UnixStream,
+    duplicate_request_write_target: Option<File>,
     json_bytes: Vec<u8>,
 }
 
@@ -37,9 +39,10 @@ impl<D: From<ReplyState>> ReadData<D> for Client {
 }
 
 impl Client {
-    pub fn new(server_socket: UnixStream) -> Self {
+    pub fn new(server_socket: UnixStream, duplicate_request_write_target: Option<File>) -> Self {
         Self {
             server_stream: server_socket,
+            duplicate_request_write_target,
             json_bytes: vec![],
         }
     }
@@ -47,6 +50,10 @@ impl Client {
     pub fn send_bytes(&mut self, bytes: &[u8]) -> Result<()> {
         self.server_stream.write(&bytes)?;
         self.server_stream.flush()?;
+        if let Some(duplicate_target) = &mut self.duplicate_request_write_target {
+            duplicate_target.write(&bytes)?;
+            duplicate_target.flush()?;
+        }
         Ok(())
     }
 
