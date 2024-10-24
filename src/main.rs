@@ -53,22 +53,27 @@ struct Args {
     json_schema: Option<PrintJsonSchemaFor>,
 }
 
-fn main() -> ExitCode {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> ExitCode {
     let args = Args::parse();
     match args.json_schema {
         Some(PrintJsonSchemaFor::Request) => {
-            println!(
+            writeln!(
+                stdout(),
                 "{}",
                 serde_json::to_string_pretty(&schema_for!(json_request_processor::Request))
                     .unwrap()
-            );
+            )
+            .unwrap();
             return ExitCode::SUCCESS;
         }
         Some(PrintJsonSchemaFor::Reply) => {
-            println!(
+            writeln!(
+                stdout(),
                 "{}",
                 serde_json::to_string_pretty(&schema_for!(json_request_processor::Reply)).unwrap()
-            );
+            )
+            .unwrap();
             return ExitCode::SUCCESS;
         }
         None => (),
@@ -79,19 +84,19 @@ fn main() -> ExitCode {
         .unwrap();
     let rime_api = rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
     let rime_session = rime_api::RimeSession::new(&rime_api);
-    let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
+    let maybe_terminal_interface = terminal_interface::TerminalInterface::new().await;
     let key_processor = key_processor::KeyProcessor::new();
     match maybe_terminal_interface {
         Ok(mut terminal_interface) => {
-            terminal_interface.open().unwrap();
+            terminal_interface.open().await.unwrap();
             loop {
-                let call = terminal_interface.next_call().unwrap();
+                let call = terminal_interface.next_call().await.unwrap();
                 let action = match call {
                     Call::ProcessKey { keycode, mask } => {
                         key_processor.process_key(&rime_session, keycode, mask)
                     }
                     Call::Stop => {
-                        terminal_interface.close().unwrap();
+                        terminal_interface.close().await.unwrap();
                         break;
                     }
                     _ => todo!(),
@@ -111,21 +116,24 @@ fn main() -> ExitCode {
                 match action {
                     Action::CommitString(commit_string) => {
                         if !args.continue_mode {
-                            terminal_interface.close().unwrap();
+                            terminal_interface.close().await.unwrap();
                             if !args.json {
                                 writeln!(stdout(), "{}", commit_string).unwrap();
                             }
                             break;
                         } else {
-                            terminal_interface.remove_ui().unwrap();
+                            terminal_interface.remove_ui().await.unwrap();
                             if !args.json {
                                 writeln!(stdout(), "{}", commit_string).unwrap();
                             }
-                            terminal_interface.setup_ui().unwrap();
+                            terminal_interface.setup_ui().await.unwrap();
                         }
                     }
                     Action::UpdateUi { menu, composition } => {
-                        terminal_interface.update_ui(composition, menu).unwrap()
+                        terminal_interface
+                            .update_ui(composition, menu)
+                            .await
+                            .unwrap();
                     }
                 }
             }
