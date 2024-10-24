@@ -12,10 +12,14 @@ mod terminal_interface;
 #[cfg(test)]
 mod testing_utilities;
 
+#[cfg(test)]
+mod test_rime_api;
+
 use std::io::Write;
 
 struct View {
-    input_bytes: Vec<u8>,
+    // the string that is input by the user, returned by rime.
+    preedit: String,
     height: usize,
 }
 
@@ -35,11 +39,11 @@ fn main() {
     .unwrap();
     terminal_interface.open().unwrap();
     let mut view = View {
-        input_bytes: vec![],
+        preedit: "".into(),
         height: 0,
     };
     loop {
-        let Some((action, byte_vec)) = terminal_interface.next_response() else {
+        let Some(action) = terminal_interface.next_response() else {
             unimplemented!();
         };
         terminal_interface.erase_all_line().unwrap();
@@ -49,7 +53,7 @@ fn main() {
         match action {
             terminal_interface::Action::Update(key_processor::Report {
                 commit_text: _,
-                preview_text: _,
+                preedit,
                 menu,
             }) => {
                 menu.candidates
@@ -62,12 +66,7 @@ fn main() {
                         terminal_interface.erase_line_to_right().unwrap();
                     });
                 view = View {
-                    // TODO This does not work with backspace.
-                    input_bytes: view
-                        .input_bytes
-                        .into_iter()
-                        .chain(byte_vec.into_iter())
-                        .collect(),
+                    preedit,
                     height: menu.page_size,
                 }
             }
@@ -79,9 +78,7 @@ fn main() {
                 return;
             }
         };
-        terminal_interface
-            .write(&[b"> ", view.input_bytes.as_slice()].concat())
-            .unwrap();
+        write!(terminal_interface, "> {}", view.preedit).unwrap();
     }
     #[allow(unreachable_code)]
     {

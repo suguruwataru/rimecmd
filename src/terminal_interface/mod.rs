@@ -64,19 +64,18 @@ impl<'a> TerminalInterface<'a> {
         })
     }
 
-    pub fn next_response(&mut self) -> Option<(Action, Vec<u8>)> {
-        let std::ops::ControlFlow::Break((input, byte_vec)) =
+    pub fn next_response(&mut self) -> Option<Action> {
+        let std::ops::ControlFlow::Break(input) =
             std::io::Read::by_ref(&mut self.tty_file).bytes().try_fold(
-                (input_parser::ParserState::new(), vec![]),
-                |(parser_state, mut byte_vec), maybe_byte| {
+                input_parser::ParserState::new(),
+                |parser_state, maybe_byte| {
                     let byte = maybe_byte.unwrap();
-                    byte_vec.push(byte);
                     match parser_state.consume_byte(byte) {
                         input_parser::ConsumeByteResult::Pending(state) => {
-                            std::ops::ControlFlow::Continue((state, byte_vec))
+                            std::ops::ControlFlow::Continue(state)
                         }
                         input_parser::ConsumeByteResult::Completed(input) => {
-                            std::ops::ControlFlow::Break((input, byte_vec))
+                            std::ops::ControlFlow::Break(input)
                         }
                     }
                 },
@@ -85,16 +84,15 @@ impl<'a> TerminalInterface<'a> {
             unreachable!()
         };
         match input {
-            Input::Etx => Some((Action::Exit, byte_vec)),
+            Input::Etx => Some(Action::Exit),
             input => {
                 let Some(input_translator::RimeKey { keycode, mask }) =
                     self.input_translator.translate_input(input)
                 else {
                     unimplemented!()
                 };
-                Some((
-                    Action::Update(self.key_processor.process_key(keycode, mask)),
-                    byte_vec,
+                Some(Action::Update(
+                    self.key_processor.process_key(keycode, mask),
                 ))
             }
         }

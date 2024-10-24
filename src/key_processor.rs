@@ -2,7 +2,7 @@ use crate::rime_api::{RimeMenu, RimeSession};
 
 pub struct Report {
     pub commit_text: Option<String>,
-    pub preview_text: String,
+    pub preedit: String,
     pub menu: RimeMenu,
 }
 
@@ -20,7 +20,7 @@ impl<'a> KeyProcessor<'a> {
         let context = self.rime_session.get_context();
         Report {
             commit_text: self.rime_session.get_commit().text,
-            preview_text: context.commit_text_preview,
+            preedit: context.composition.preedit,
             menu: context.menu,
         }
     }
@@ -32,7 +32,7 @@ mod test {
 
     #[test]
     #[ignore = "Test uses global object. It can only be run in one-thread mode."]
-    fn request_handler_get_commit() {
+    fn get_commit() {
         let rime_api = crate::rime_api::RimeApi::new(
             temporary_directory_path(),
             "./test_shared_data",
@@ -44,21 +44,21 @@ mod test {
         assert_eq!(
             match report {
                 super::Report {
-                    preview_text,
+                    preedit,
                     commit_text,
                     menu,
-                } => (preview_text, commit_text, menu.page_size),
+                } => (preedit, commit_text, menu.page_size),
             },
-            ("骂".into(), None, 5),
+            ("m".into(), None, 5),
         );
         let report = key_processor.process_key(73 /* I */, 0);
         assert_eq!(
             match report {
                 super::Report {
-                    preview_text,
+                    preedit,
                     commit_text,
                     menu,
-                } => (preview_text, commit_text, menu.page_size),
+                } => (preedit, commit_text, menu.page_size),
             },
             ("骂I".into(), None, 0),
         );
@@ -66,10 +66,10 @@ mod test {
         assert_eq!(
             match response {
                 super::Report {
-                    preview_text,
+                    preedit,
                     commit_text,
                     menu,
-                } => (preview_text, commit_text, menu.page_size),
+                } => (preedit, commit_text, menu.page_size),
             },
             ("骂IN".into(), None, 0),
         );
@@ -77,10 +77,10 @@ mod test {
         assert_eq!(
             match report {
                 super::Report {
-                    preview_text,
+                    preedit,
                     commit_text,
                     menu,
-                } => (preview_text, commit_text, menu.page_size),
+                } => (preedit, commit_text, menu.page_size),
             },
             ("骂INY".into(), None, 0),
         );
@@ -88,10 +88,10 @@ mod test {
         assert_eq!(
             match report {
                 super::Report {
-                    preview_text,
+                    preedit,
                     commit_text,
                     menu,
-                } => (preview_text, commit_text, menu.page_size),
+                } => (preedit, commit_text, menu.page_size),
             },
             ("".into(), Some("骂INY".into()), 0),
         );

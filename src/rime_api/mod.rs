@@ -105,9 +105,45 @@ struct CRimeCandidateListIterator {
 }
 
 #[repr(C)]
+struct CRimedRimeComposition {
+    length: c_int,
+    cursor_pos: c_int,
+    sel_start: c_int,
+    sel_end: c_int,
+    preedit: *mut c_char,
+}
+
+#[derive(Debug)]
+pub struct RimeComposition {
+    pub length: usize,
+    pub cursor_pos: usize,
+    pub sel_start: usize,
+    pub sel_end: usize,
+    pub preedit: String,
+}
+
+fn rime_composition_from_c(c_rimed_rime_composition: &CRimedRimeComposition) -> RimeComposition {
+    RimeComposition {
+        length: c_rimed_rime_composition.length as usize,
+        cursor_pos: c_rimed_rime_composition.cursor_pos as usize,
+        sel_start: c_rimed_rime_composition.sel_start as usize,
+        sel_end: c_rimed_rime_composition.sel_end as usize,
+        preedit: if c_rimed_rime_composition.preedit.is_null() {
+            "".into()
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(c_rimed_rime_composition.preedit) }
+                .to_str()
+                .unwrap()
+                .to_owned()
+        },
+    }
+}
+
+#[repr(C)]
 struct CRimedRimeContext {
-    commit_text_preview: *mut c_char,
+    composition: CRimedRimeComposition,
     menu: CRimeMenu,
+    commit_text_preview: *mut c_char,
 }
 
 #[derive(Debug)]
@@ -160,6 +196,7 @@ fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize, menu: &CRimeMenu)
 #[derive(Debug)]
 pub struct RimeContext {
     pub commit_text_preview: String,
+    pub composition: RimeComposition,
     pub menu: RimeMenu,
 }
 
@@ -294,6 +331,13 @@ impl<'a> RimeSession<'a> {
     pub fn get_context(&self) -> RimeContext {
         let mut c_context = CRimedRimeContext {
             commit_text_preview: std::ptr::null_mut(),
+            composition: CRimedRimeComposition {
+                sel_end: 0,
+                sel_start: 0,
+                length: 0,
+                cursor_pos: 0,
+                preedit: std::ptr::null_mut(),
+            },
             menu: CRimeMenu {
                 num_candidates: 0,
                 page_size: 0,
@@ -316,6 +360,7 @@ impl<'a> RimeSession<'a> {
                     .unwrap()
                     .to_owned()
             },
+            composition: rime_composition_from_c(&c_context.composition),
             menu: get_rime_menu(self.api.c_rime_api, self.session_id, &c_context.menu),
         };
         unsafe {

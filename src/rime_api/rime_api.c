@@ -122,8 +122,9 @@ Bool c_process_key(RimeApi *rime_api, RimeSessionId session_id, int keycode,
 }
 
 typedef struct rimed_rime_context {
-  char *commit_text_preview;
+  RimeComposition composition;
   RimeMenu menu;
+  char *commit_text_preview;
 } RimedRimeContext;
 
 void c_get_context(RimeApi *rime_api, RimeSessionId session_id,
@@ -134,6 +135,10 @@ void c_get_context(RimeApi *rime_api, RimeSessionId session_id,
     rimed_context->commit_text_preview =
         strdup(rime_context.commit_text_preview);
   }
+  rimed_context->composition = rime_context.composition;
+  if (rime_context.composition.preedit)
+    rimed_context->composition.preedit =
+        strdup(rime_context.composition.preedit);
   rimed_context->menu = rime_context.menu;
   rime_api->free_context(&rime_context);
 }
@@ -141,6 +146,8 @@ void c_get_context(RimeApi *rime_api, RimeSessionId session_id,
 void c_free_context(RimedRimeContext *context) {
   if (context->commit_text_preview)
     free(context->commit_text_preview);
+  if (context->composition.preedit)
+    free(context->composition.preedit);
 }
 
 Bool c_get_current_schema(RimeApi *rime_api, RimeSessionId session_id,
