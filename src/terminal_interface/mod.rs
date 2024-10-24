@@ -1,4 +1,5 @@
-use crate::json_request_processor::Call;
+use crate::rime_api::{RimeComposition, RimeMenu};
+use crate::Call;
 /// This module includes that code that interacts with a text terminal
 ///
 /// This module interacts with a terminal using console_codes(4). In
@@ -13,7 +14,6 @@ use crate::json_request_processor::Call;
 /// wrong with. Also, with today's terminals, which generally support a
 /// similar set of codes, and the limited terminal functions this program
 /// uses, `terminfo` hardly makes a difference.
-use crate::rime_api::{RimeComposition, RimeMenu};
 use std::iter::Iterator;
 use std::num::NonZeroUsize;
 use std::os::fd::AsRawFd;

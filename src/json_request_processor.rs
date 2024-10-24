@@ -1,5 +1,6 @@
 use crate::key_processor::KeyProcessor;
 use crate::rime_api::RimeSession;
+use crate::{Action, Call};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -8,19 +9,6 @@ use serde::{Deserialize, Serialize};
 pub struct Request {
     pub id: String,
     pub call: Call,
-}
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(
-    rename_all = "snake_case",
-    tag = "method",
-    content = "params",
-    deny_unknown_fields
-)]
-pub enum Call {
-    SchemaName,
-    Stop,
-    ProcessKey { keycode: usize, mask: usize },
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -34,7 +22,7 @@ pub struct Reply {
 #[serde(rename_all = "snake_case", untagged, deny_unknown_fields)]
 pub enum Result {
     SchemaName(String),
-    Action(crate::key_processor::Action),
+    Action(Action),
 }
 
 pub struct JsonRequestProcessor<'a> {

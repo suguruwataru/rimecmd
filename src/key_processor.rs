@@ -1,21 +1,5 @@
-use crate::rime_api::{RimeComposition, RimeMenu, RimeSession};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(
-    rename_all = "snake_case",
-    tag = "action",
-    content = "params",
-    deny_unknown_fields
-)]
-pub enum Action {
-    CommitString(String),
-    UpdateUi {
-        composition: RimeComposition,
-        menu: RimeMenu,
-    },
-}
+use crate::rime_api::RimeSession;
+use crate::Action;
 
 pub struct KeyProcessor;
 

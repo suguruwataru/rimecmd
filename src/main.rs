@@ -1,13 +1,45 @@
 mod error;
-#[allow(dead_code)]
 mod json_request_processor;
 mod key_processor;
 #[allow(dead_code)]
 mod rime_api;
 mod terminal_interface;
+mod terminal_json_mode;
+mod terminal_mode;
 use error::Error;
-use json_request_processor::{Call, Reply, Request, Result as ReplyResult};
-use key_processor::Action;
+use rime_api::{RimeComposition, RimeMenu};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use terminal_json_mode::{JsonStdin, TerminalJsonMode};
+use terminal_mode::TerminalMode;
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    rename_all = "snake_case",
+    tag = "method",
+    content = "params",
+    deny_unknown_fields
+)]
+pub enum Call {
+    SchemaName,
+    Stop,
+    ProcessKey { keycode: usize, mask: usize },
+}
+
+#[derive(Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    rename_all = "snake_case",
+    tag = "action",
+    content = "params",
+    deny_unknown_fields
+)]
+pub enum Action {
+    CommitString(String),
+    UpdateUi {
+        composition: RimeComposition,
+        menu: RimeMenu,
+    },
+}
 
 #[cfg(test)]
 mod testing_utilities;
@@ -17,8 +49,6 @@ use schemars::schema_for;
 use std::io::{stdout, Write};
 use std::process::ExitCode;
 
-use tokio::io::AsyncReadExt;
-
 #[derive(Clone, clap::ValueEnum)]
 enum PrintJsonSchemaFor {
     Reply,
@@ -27,7 +57,7 @@ enum PrintJsonSchemaFor {
 
 #[derive(Parser)]
 #[command(version, about)]
-struct Args {
+pub struct Args {
     #[arg(long, short = 'l', value_enum, default_value = "none")]
     /// The lowest level of Rime logs to write to stderr.
     ///
@@ -54,143 +84,6 @@ struct Args {
     #[arg(short, long, exclusive(true))]
     /// Print the JSON schema used, then exit.
     json_schema: Option<PrintJsonSchemaFor>,
-}
-
-use terminal_interface::TerminalInterface;
-
-struct TerminalMode<'a> {
-    pub args: Args,
-    pub terminal_interface: TerminalInterface,
-    pub rime_session: RimeSession<'a>,
-}
-
-use rime_api::RimeSession;
-
-impl<'a> TerminalMode<'a> {
-    pub async fn main(mut self) -> Result<(), Error> {
-        let key_processor = key_processor::KeyProcessor::new();
-        self.terminal_interface.open().await?;
-        loop {
-            let call = self.terminal_interface.next_call().await?;
-            let action = match call {
-                Call::ProcessKey { keycode, mask } => {
-                    key_processor.process_key(&self.rime_session, keycode, mask)
-                }
-                Call::Stop => {
-                    self.terminal_interface.close().await?;
-                    break;
-                }
-                _ => unreachable!(),
-            };
-            match action {
-                Action::CommitString(commit_string) => {
-                    if !self.args.continue_mode {
-                        self.terminal_interface.close().await?;
-                        writeln!(stdout(), "{}", commit_string)?;
-                        break;
-                    } else {
-                        self.terminal_interface.remove_ui().await?;
-                        writeln!(stdout(), "{}", commit_string)?;
-                        self.terminal_interface.setup_ui().await?;
-                    }
-                }
-                Action::UpdateUi { menu, composition } => {
-                    self.terminal_interface.update_ui(composition, menu).await?;
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-struct TerminalJsonMode<'a> {
-    pub args: Args,
-    pub terminal_interface: TerminalInterface,
-    pub json_stdin: JsonStdin,
-    pub rime_session: RimeSession<'a>,
-}
-
-impl TerminalJsonMode<'_> {
-    pub async fn main(&mut self) -> Result<(), Error> {
-        let json_request_processor = json_request_processor::JsonRequestProcessor {
-            rime_session: &self.rime_session,
-            key_processor: key_processor::KeyProcessor::new(),
-        };
-        self.terminal_interface.open().await?;
-        loop {
-            let request = tokio::select! {
-                call = self.terminal_interface.next_call() => Request { id: uuid::Uuid::new_v4().into(), call: call? },
-                request = self.json_stdin.next_request() => request?,
-            };
-            let reply = match request {
-                Request {
-                    id: _,
-                    call: Call::Stop,
-                } => {
-                    self.terminal_interface.close().await?;
-                    break;
-                }
-                request => json_request_processor.process_request(request),
-            };
-            match reply {
-                Reply {
-                    result: ReplyResult::Action(Action::CommitString(_)),
-                    ..
-                } => {
-                    if !self.args.continue_mode {
-                        self.terminal_interface.close().await?;
-                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
-                        break;
-                    } else {
-                        self.terminal_interface.remove_ui().await?;
-                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
-                        self.terminal_interface.setup_ui().await?;
-                    }
-                }
-                Reply {
-                    result: ReplyResult::Action(Action::UpdateUi { menu, composition }),
-                    ..
-                } => {
-                    self.terminal_interface.update_ui(composition, menu).await?;
-                }
-                _ => todo!(),
-            }
-        }
-        Ok(())
-    }
-}
-
-struct JsonStdin {
-    stdin: tokio::io::Stdin,
-}
-
-impl JsonStdin {
-    pub fn new() -> Self {
-        Self {
-            stdin: tokio::io::stdin(),
-        }
-    }
-
-    pub async fn next_request(&mut self) -> Result<Request, Error> {
-        let mut buf = [0u8; 1024];
-        let mut json_bytes = vec![];
-        loop {
-            let count = self.stdin.read(&mut buf).await?;
-            if count == 0 {
-                break Err(Error::UnsupportedInput);
-            }
-            json_bytes.extend_from_slice(&buf[0..count]);
-            match serde_json::from_slice::<Request>(&json_bytes) {
-                Ok(call) => break Ok(call),
-                Err(err) => {
-                    if err.is_eof() {
-                        continue;
-                    }
-                    break Err(crate::Error::Json(err));
-                }
-            };
-        }
-    }
 }
 
 #[tokio::main(flavor = "current_thread")]
