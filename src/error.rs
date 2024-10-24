@@ -5,6 +5,12 @@ pub enum Error<E: std::fmt::Debug> {
     External(E),
 }
 
+impl<E: std::fmt::Debug> From<E> for crate::Error<E> {
+    fn from(source: E) -> Self {
+        Self::External(source)
+    }
+}
+
 impl<E: std::fmt::Debug> std::fmt::Debug for Error<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

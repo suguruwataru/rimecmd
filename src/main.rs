@@ -4,6 +4,7 @@ mod json_request_processor;
 mod key_processor;
 #[allow(dead_code)]
 mod rime_api;
+mod stdin_interface;
 mod terminal_interface;
 use error::Error;
 
@@ -74,7 +75,23 @@ fn main() -> ExitCode {
         .unwrap();
     let rime_api = rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
     if args.json || args.stdio {
-        todo!()
+        if args.continue_mode {
+            todo!("conflicting args")
+        }
+        loop {
+            match stdin_interface::StdinInterface::new(
+                json_request_processor::JsonRequestProcessor::new(rime_api::RimeSession::new(
+                    &rime_api,
+                )),
+            )
+            .process_input()
+            {
+                Ok(reply) => {
+                    writeln!(stdout(), "{}", serde_json::to_string(&reply).unwrap()).unwrap();
+                }
+                _ => todo!(),
+            }
+        }
     } else {
         let maybe_terminal_interface = terminal_interface::TerminalInterface::new(
             key_processor::KeyProcessor::new(rime_api::RimeSession::new(&rime_api)),

@@ -59,12 +59,6 @@ pub struct TerminalInterface<'a> {
 
 type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
 
-impl From<std::io::Error> for crate::Error<std::io::Error> {
-    fn from(source: std::io::Error) -> Self {
-        Self::External(source)
-    }
-}
-
 impl<'a> TerminalInterface<'a> {
     pub fn new(key_processor: KeyProcessor<'a>) -> Result<Self> {
         Ok(Self {
