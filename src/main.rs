@@ -119,7 +119,7 @@ async fn main() -> ExitCode {
     let rime_session = rime_api::RimeSession::new(&rime_api);
     if args.json && args.tty {
         let maybe_terminal_interface = terminal_interface::TerminalInterface::new().await;
-        let json_stdin = JsonStdin::new();
+        let json_stdin = JsonStdin::new().await;
         return match maybe_terminal_interface {
             Ok(terminal_interface) => {
                 TerminalJsonMode {

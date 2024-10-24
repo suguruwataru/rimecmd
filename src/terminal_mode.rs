@@ -38,7 +38,10 @@ impl<'a> TerminalMode<'a> {
                         self.terminal_interface.setup_ui().await?;
                     }
                 }
-                Action::UpdateUi { menu, composition } => {
+                Action::UpdateUi {
+                    ref menu,
+                    ref composition,
+                } => {
                     self.terminal_interface.update_ui(composition, menu).await?;
                 }
             }

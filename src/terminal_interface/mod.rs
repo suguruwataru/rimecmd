@@ -118,7 +118,7 @@ impl TerminalInterface {
     /// This method does not flush the output.
     ///
     /// On success, return the row to place the cursor, using 1-index.
-    async fn draw_menu(&mut self, menu: crate::rime_api::RimeMenu) -> Result<NonZeroUsize> {
+    async fn draw_menu(&mut self, menu: &crate::rime_api::RimeMenu) -> Result<NonZeroUsize> {
         let mut height = 0;
         for (index, candidate) in menu.candidates.iter().enumerate() {
             self.tty_file.write(b"\r\n").await?;
@@ -158,7 +158,7 @@ impl TerminalInterface {
     /// considers the cursor position is.
     async fn draw_composition(
         &mut self,
-        composition: crate::rime_api::RimeComposition,
+        composition: &crate::rime_api::RimeComposition,
     ) -> Result<NonZeroUsize> {
         self.tty_file.write(b"> ").await?;
         self.set_character_attribute(CharacterAttribute::Faint)
@@ -234,7 +234,11 @@ impl TerminalInterface {
         }
     }
 
-    pub async fn update_ui(&mut self, composition: RimeComposition, menu: RimeMenu) -> Result<()> {
+    pub async fn update_ui(
+        &mut self,
+        composition: &RimeComposition,
+        menu: &RimeMenu,
+    ) -> Result<()> {
         self.carriage_return().await?;
         let final_cursor_col = self.draw_composition(composition).await?;
         let final_cursor_row = self.draw_menu(menu).await?;

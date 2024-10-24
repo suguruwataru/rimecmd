@@ -11,7 +11,7 @@ pub struct JsonStdin {
 }
 
 impl JsonStdin {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         Self {
             stdin: tokio::io::stdin(),
         }
@@ -84,12 +84,19 @@ impl TerminalJsonMode<'_> {
                     }
                 }
                 Reply {
-                    result: ReplyResult::Action(Action::UpdateUi { menu, composition }),
+                    result:
+                        ReplyResult::Action(Action::UpdateUi {
+                            ref menu,
+                            ref composition,
+                        }),
                     ..
                 } => {
+                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
                     self.terminal_interface.update_ui(composition, menu).await?;
                 }
-                _ => todo!(),
+                reply => {
+                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                }
             }
         }
         Ok(())
