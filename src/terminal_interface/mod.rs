@@ -3,6 +3,7 @@ use crate::rime_api::key_mappings::{
     rime_character_to_key_name_map, rime_key_name_to_key_code_map,
 };
 use std::collections::HashMap;
+mod input_parser;
 
 pub struct TerminalInterface<'a> {
     request_handler: RequestHandler<'a>,
