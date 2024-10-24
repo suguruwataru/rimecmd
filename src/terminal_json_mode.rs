@@ -94,7 +94,7 @@ impl TerminalJsonMode {
                     stdout().write(&bytes)?;
                     stdout().flush()?;
                     json_bytes.extend_from_slice(&bytes);
-                    match serde_json::from_slice(&bytes) {
+                    match serde_json::from_slice(&json_bytes) {
                         Ok(reply) => {
                             json_bytes.clear();
                             reply

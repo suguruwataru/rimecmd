@@ -65,6 +65,7 @@ impl JsonMode {
             Rc::clone(&server_reader) as Rc<RefCell<dyn ReadData<Bytes>>>,
             Rc::clone(&stdin) as Rc<RefCell<dyn ReadData<Bytes>>>,
         ])?;
+        let mut json_bytes = vec![];
         loop {
             let bytes = poll_data.poll()?;
             match bytes {
@@ -75,16 +76,20 @@ impl JsonMode {
                 Bytes::ServerBytes(bytes) => {
                     stdout().write(&bytes)?;
                     stdout().flush()?;
-                    match serde_json::from_slice(&bytes)? {
-                        Reply {
+                    json_bytes.extend_from_slice(&bytes);
+                    match serde_json::from_slice(&json_bytes) {
+                        Ok(Reply {
                             outcome: Outcome::Effect(Effect::StopClient | Effect::StopServer),
                             ..
-                        } => {
+                        }) => {
+                            json_bytes.clear();
                             server_reader.borrow_mut().stream.shutdown(Shutdown::Read)?;
                             server_writer.shutdown(Shutdown::Write)?;
                             break;
                         }
-                        _ => (),
+                        Ok(_) => json_bytes.clear(),
+                        Err(err) if err.is_eof() => continue,
+                        Err(err) => return Err(err.into()),
                     }
                 }
             }
