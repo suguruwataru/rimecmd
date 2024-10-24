@@ -13,16 +13,17 @@ mod server_mode;
 mod terminal_interface;
 mod terminal_json_mode;
 mod terminal_mode;
-
+use crate::server_mode::ServerMode;
+use clap::Parser;
 use error::Error;
 use json_mode::JsonMode;
-use json_source::JsonSource;
 use rime_api::{RimeComposition, RimeMenu};
+use schemars::schema_for;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use server_mode::ServerMode;
+use std::io::{stdout, Write};
 use std::path::PathBuf;
-use std::sync::{mpsc::channel, Arc, Mutex};
+use std::process::ExitCode;
 use terminal_json_mode::TerminalJsonMode;
 use terminal_mode::TerminalMode;
 
@@ -51,13 +52,6 @@ pub enum Effect {
     },
     Stop,
 }
-
-use clap::Parser;
-use schemars::schema_for;
-use std::io::{stdout, Write};
-use std::os::unix::net::UnixListener;
-use std::process::ExitCode;
-use std::thread;
 
 #[derive(Clone, clap::ValueEnum)]
 enum PrintJsonSchemaFor {
@@ -186,60 +180,20 @@ fn rimecmd() -> Result<()> {
         return print_config(config);
     }
     if args.server {
-        let listener = UnixListener::bind(&config.unix_socket).unwrap();
-        let (error_sender, error_receiver) = channel();
-        let error_sender = Arc::new(Mutex::new(error_sender));
-        thread::spawn(move || loop {
-            let _error: Error = error_receiver.recv().unwrap();
-            todo!("implement error logging");
-        });
-        for stream in listener.incoming() {
-            let stream = stream?;
-            let config = config.clone();
-            let error_sender = Arc::clone(&error_sender);
-            thread::spawn(move || {
-                let rime_api = rime_api::RimeApi::new(
-                    &config.user_data_directory,
-                    "/usr/share/rime-data",
-                    config.rime_log_level,
-                );
-                let rime_session = rime_api::RimeSession::new(&rime_api);
-                let input_stream = match stream.try_clone() {
-                    Ok(stream) => stream,
-                    Err(error) => {
-                        error_sender.lock().unwrap().send(error.into()).unwrap();
-                        return ();
-                    }
-                };
-                ServerMode {
-                    json_source: JsonSource::new(input_stream),
-                    json_dest: stream,
-                    rime_session,
-                }
-                .main()
-                .unwrap_or_else(|err| error_sender.lock().unwrap().send(err).unwrap());
-            });
-        }
-        return Ok(());
+        return ServerMode::new(config).main();
     }
     if args.json {
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
-            TerminalJsonMode::new(config, terminal_interface).main()?;
-            return Ok(());
+            return TerminalJsonMode::new(config, terminal_interface).main();
         } else {
-            JsonMode::new(config).main()?;
-            return Ok(());
+            return JsonMode::new(config).main();
         };
     }
     let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
     match maybe_terminal_interface {
-        Ok(terminal_interface) => {
-            TerminalMode::new(config, terminal_interface).main()?;
-        }
-        Err(Error::NotATerminal) => {
-            JsonMode::new(config).main()?;
-        }
+        Ok(terminal_interface) => return TerminalMode::new(config, terminal_interface).main(),
+        Err(Error::NotATerminal) => return JsonMode::new(config).main(),
         err => {
             err?;
         }

@@ -58,7 +58,7 @@ impl TryFrom<crate::Error> for Outcome {
 
 pub struct JsonRequestProcessor<'a> {
     pub key_processor: KeyProcessor,
-    pub rime_session: &'a RimeSession<'a>,
+    pub rime_session: &'a RimeSession,
 }
 
 impl JsonRequestProcessor<'_> {
@@ -90,6 +90,7 @@ impl JsonRequestProcessor<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     #[ignore = "not thread safe"]
@@ -99,7 +100,7 @@ mod test {
             "./test_shared_data",
             crate::testing_utilities::LOG_LEVEL,
         );
-        let rime_session = crate::rime_api::RimeSession::new(&rime_api);
+        let rime_session = crate::rime_api::RimeSession::new(Arc::new(Mutex::new(rime_api)));
         let json_request_processor = JsonRequestProcessor {
             key_processor: KeyProcessor::new(),
             rime_session: &rime_session,
@@ -121,7 +122,7 @@ mod test {
             "./test_shared_data",
             crate::testing_utilities::LOG_LEVEL,
         );
-        let rime_session = crate::rime_api::RimeSession::new(&rime_api);
+        let rime_session = crate::rime_api::RimeSession::new(Arc::new(Mutex::new(rime_api)));
         let json_request_processor = JsonRequestProcessor {
             key_processor: KeyProcessor::new(),
             rime_session: &rime_session,

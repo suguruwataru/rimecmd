@@ -3,7 +3,7 @@ use crate::Error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, c_int, c_void, CStr};
-use std::sync::Once;
+use std::sync::{Arc, Mutex, Once};
 
 static RIME_API_SETUP: Once = Once::new();
 
@@ -304,23 +304,24 @@ fn c_string_from_path(path: &std::path::Path) -> Result<std::ffi::CString, Error
         })
 }
 
-pub struct RimeSession<'a> {
-    api: &'a RimeApi,
+pub struct RimeSession {
+    api: Arc<Mutex<RimeApi>>,
     session_id: usize,
 }
 
-impl<'a> RimeSession<'a> {
-    pub fn new(api: &'a RimeApi) -> Self {
-        Self {
-            session_id: unsafe { c_create_session(api.c_rime_api) },
-            api,
-        }
+impl RimeSession {
+    pub fn new(api: Arc<Mutex<RimeApi>>) -> Self {
+        let lock = api.lock().unwrap();
+        let session_id = unsafe { c_create_session(lock.c_rime_api) };
+        drop(lock);
+        Self { session_id, api }
     }
 
     pub fn process_key(&self, keycode: usize, mask: usize) -> bool {
+        let api = self.api.lock().unwrap();
         1 == unsafe {
             c_process_key(
-                self.api.c_rime_api,
+                api.c_rime_api,
                 self.session_id,
                 keycode.try_into().unwrap(),
                 mask.try_into().unwrap(),
@@ -329,14 +330,10 @@ impl<'a> RimeSession<'a> {
     }
 
     pub fn get_current_schema(&self) -> String {
+        let api = self.api.lock().unwrap();
         let mut buffer = [0; 1024];
         if 0 == unsafe {
-            c_get_current_schema(
-                self.api.c_rime_api,
-                self.session_id,
-                buffer.as_mut_ptr(),
-                1024,
-            )
+            c_get_current_schema(api.c_rime_api, self.session_id, buffer.as_mut_ptr(), 1024)
         } {
             panic!();
         }
@@ -347,6 +344,7 @@ impl<'a> RimeSession<'a> {
     }
 
     pub fn get_context(&self) -> RimeContext {
+        let api = self.api.lock().unwrap();
         let mut c_context = CRimecmdRimeContext {
             commit_text_preview: std::ptr::null_mut(),
             composition: CRimecmdRimeComposition {
@@ -367,7 +365,7 @@ impl<'a> RimeSession<'a> {
             },
         };
         unsafe {
-            c_get_context(self.api.c_rime_api, self.session_id, &mut c_context);
+            c_get_context(api.c_rime_api, self.session_id, &mut c_context);
         }
         let context = RimeContext {
             commit_text_preview: if c_context.commit_text_preview.is_null() {
@@ -379,7 +377,7 @@ impl<'a> RimeSession<'a> {
                     .to_owned()
             },
             composition: rime_composition_from_c(&c_context.composition),
-            menu: get_rime_menu(self.api.c_rime_api, self.session_id, &c_context.menu),
+            menu: get_rime_menu(api.c_rime_api, self.session_id, &c_context.menu),
         };
         unsafe {
             c_free_context(&mut c_context);
@@ -388,11 +386,12 @@ impl<'a> RimeSession<'a> {
     }
 
     pub fn get_commit(&self) -> RimeCommit {
+        let api = self.api.lock().unwrap();
         let mut c_commit = CRimecmdRimeCommit {
             text: std::ptr::null_mut(),
         };
         unsafe {
-            c_get_commit(self.api.c_rime_api, self.session_id, &mut c_commit);
+            c_get_commit(api.c_rime_api, self.session_id, &mut c_commit);
         }
         let commit = RimeCommit {
             text: (!c_commit.text.is_null()).then(|| {
@@ -409,6 +408,7 @@ impl<'a> RimeSession<'a> {
     }
 
     pub fn get_status(&self) -> RimeStatus {
+        let api = self.api.lock().unwrap();
         let mut c_status = CRimecmdRimeStatus {
             schema_id: std::ptr::null_mut(),
             schema_name: std::ptr::null_mut(),
@@ -421,7 +421,7 @@ impl<'a> RimeSession<'a> {
             is_ascii_punct: 0,
         };
         unsafe {
-            c_get_status(self.api.c_rime_api, self.session_id, &mut c_status);
+            c_get_status(api.c_rime_api, self.session_id, &mut c_status);
         }
         if c_status.schema_id.is_null() {
             panic!();
@@ -453,18 +453,29 @@ impl<'a> RimeSession<'a> {
     }
 }
 
-impl Drop for RimeSession<'_> {
+impl Drop for RimeSession {
     fn drop(&mut self) {
+        let api = self.api.lock().unwrap();
         unsafe {
-            c_destory_session(self.api.c_rime_api, self.session_id);
+            c_destory_session(api.c_rime_api, self.session_id);
         }
     }
 }
 
 pub struct RimeApi {
     c_rime_api: *mut CRimeApi,
+    // The pointers of the strings below are passed to Rime and kept there,
+    // so it is necessary to ensure that these strings are kept at the
+    // same memory location.
     _user_data_dir: std::boxed::Box<std::ffi::CString>,
     _shared_data_dir: std::boxed::Box<std::ffi::CString>,
+}
+
+unsafe impl Send for RimeApi {
+    // If anything goes wrong, check the threading in server mode.
+    // Only the main thread might mutate the c_rime_api pointer during
+    // initalization and finalization of the Rime API, so it should be fine to
+    // impl Send here.
 }
 
 impl Drop for RimeApi {
@@ -571,6 +582,7 @@ pub enum LogLevel {
 #[cfg(test)]
 mod test {
     use crate::testing_utilities::{temporary_directory_path, LOG_LEVEL};
+    use std::sync::{Arc, Mutex};
 
     #[test]
     #[ignore = "not thread safe"]
@@ -580,7 +592,7 @@ mod test {
             "./test_shared_data",
             LOG_LEVEL,
         );
-        let rime_session = crate::rime_api::RimeSession::new(&rime_api);
+        let rime_session = crate::rime_api::RimeSession::new(Arc::new(Mutex::new(rime_api)));
         rime_session.process_key(109 /* m */, 0);
         assert_eq!("m", rime_session.get_context().composition.preedit);
     }
@@ -593,7 +605,7 @@ mod test {
             "./test_shared_data",
             LOG_LEVEL,
         );
-        let rime_session = crate::rime_api::RimeSession::new(&rime_api);
+        let rime_session = crate::rime_api::RimeSession::new(Arc::new(Mutex::new(rime_api)));
         rime_session.process_key(109 /* m */, 0);
         rime_session.process_key(110 /* n */, 0);
         rime_session.process_key(111 /* o */, 0);
@@ -609,7 +621,7 @@ mod test {
             "./test_shared_data",
             LOG_LEVEL,
         );
-        let rime_session = crate::rime_api::RimeSession::new(&rime_api);
+        let rime_session = crate::rime_api::RimeSession::new(Arc::new(Mutex::new(rime_api)));
         rime_session.process_key(109 /* m */, 0);
         rime_session.process_key(105 /* i */, 0);
         assert_eq!("mi", rime_session.get_context().composition.preedit);
@@ -625,7 +637,7 @@ mod test {
             "./test_shared_data",
             LOG_LEVEL,
         );
-        let rime_session = crate::rime_api::RimeSession::new(&rime_api);
+        let rime_session = crate::rime_api::RimeSession::new(Arc::new(Mutex::new(rime_api)));
         rime_session.process_key(96 /* ` */, 1 << 2 /* Control */);
         rime_session.process_key(50 /* 2 */, 0);
         let context = rime_session.get_context();

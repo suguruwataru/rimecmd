@@ -26,6 +26,7 @@ impl KeyProcessor {
 mod test {
     use crate::key_processor::{Effect, KeyProcessor};
     use crate::testing_utilities::{temporary_directory_path, LOG_LEVEL};
+    use std::sync::{Arc, Mutex};
 
     #[test]
     #[ignore = "not thread safe"]
@@ -35,7 +36,7 @@ mod test {
             "./test_shared_data",
             LOG_LEVEL,
         );
-        let rime_session = crate::rime_api::RimeSession::new(&rime_api);
+        let rime_session = crate::rime_api::RimeSession::new(Arc::new(Mutex::new(rime_api)));
         let key_processor = KeyProcessor::new();
         let report = key_processor.process_key(&rime_session, 109 /* m */, 0);
         assert_eq!(
