@@ -30,9 +30,15 @@ automatically use what building C sources produces
 cargo build
 ```
 
-Or `cargo test -- --test-threads=1` can be directly run. This command does not
-only build it, but also runs the tests to ensure that things are actually
-working. Though tests might pass when running it without parallelization (i.e.
-without `--test-threads=1`, and they most likely will not pass), Rime is not
-designed to be thread-safe and tampers with global objects, so the tests must
-be run in a single thread.
+Or `cargo test` can be directly run. This command does not only build it, but
+also runs the tests to ensure that things are actually working.
+
+`cargo test` only runs tests that do not interact with the Rime API. Rime is
+not designed to be thread-safe and tampers with global objects, so tests
+involving its API cannot be run concurrently, which is how `cargo test` runs
+tests by default, and therefore are labeled `#[ignored]` in this project. To
+run them, run
+
+```
+cargo test -- --ignored --test-threads=1
+```

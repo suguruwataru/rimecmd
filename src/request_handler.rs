@@ -58,7 +58,8 @@ mod test {
     use crate::testing_utilities::{temporary_directory_path, LOG_LEVEL};
 
     #[test]
-    fn get_commit() {
+    #[ignore]
+    fn request_handler_get_commit() {
         let rime_api = crate::rime_api::RimeApi::new(
             temporary_directory_path(),
             "./test_shared_data",
@@ -114,7 +115,8 @@ mod test {
     }
 
     #[test]
-    fn test_handle_status_request() {
+    #[ignore]
+    fn request_handler_handle_status_request() {
         let rime_api = crate::rime_api::RimeApi::new(
             temporary_directory_path(),
             "./test_shared_data",

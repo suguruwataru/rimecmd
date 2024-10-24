@@ -5,4 +5,5 @@ find src -name '*.c' | xargs clang-check -p build/meson
 find src -name '*.c' | xargs clang-format --dry-run
 cargo fmt --check
 cargo check
-cargo test -- --test-threads=1
+cargo test
+cargo test -- --ignored --test-threads=1
