@@ -5,5 +5,7 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2.150"
-rand = "0.8.5"
 xdg = "2.5.2"
+
+[dev-dependencies]
+rand = "0.8.5"
