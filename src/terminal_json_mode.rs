@@ -6,6 +6,7 @@ use crate::Result;
 use crate::{Config, Effect};
 use std::cell::RefCell;
 use std::io::{stdin, stdout, Write};
+use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::rc::Rc;
 
@@ -121,6 +122,15 @@ impl TerminalJsonMode {
                     self.terminal_interface
                         .borrow_mut()
                         .update_ui(composition, menu)?;
+                }
+                Reply {
+                    outcome: Outcome::Effect(Effect::Stop),
+                    ..
+                } => {
+                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                    server_reader.borrow_mut().stream.shutdown(Shutdown::Both)?;
+                    self.terminal_interface.borrow_mut().close()?;
+                    break;
                 }
                 reply => {
                     writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;

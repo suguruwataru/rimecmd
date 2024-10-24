@@ -4,7 +4,7 @@ use crate::key_processor::KeyProcessor;
 use crate::poll_data::ReadData;
 use crate::rime_api::RimeSession;
 use crate::Effect;
-use crate::Result;
+use crate::{Error, Result};
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 
@@ -45,6 +45,10 @@ impl<'a, I: Read + AsRawFd, O: Write> ServerMode<'a, I, O> {
                 break;
             }
         }
-        Ok(())
+        match self.json_source.read_data() {
+            Err(Error::InputClosed) => Ok(()),
+            Ok(_) => Err(Error::ClientShouldCloseConnection),
+            other => other,
+        }
     }
 }

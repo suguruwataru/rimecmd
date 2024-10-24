@@ -4,6 +4,7 @@ use crate::Effect;
 use crate::Result;
 use std::cell::RefCell;
 use std::io::{stdin, stdout, Read, Write};
+use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::rc::Rc;
 
@@ -77,6 +78,7 @@ impl JsonMode {
                         ..
                     } = serde_json::from_slice(&bytes)?
                     {
+                        server_reader.borrow_mut().stream.shutdown(Shutdown::Both)?;
                         break;
                     }
                     stdout().write(&bytes)?;

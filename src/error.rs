@@ -2,6 +2,7 @@ pub enum Error {
     NonUtf8DataHomePath,
     NotATerminal,
     UnsupportedInput,
+    ClientShouldCloseConnection,
     ServerClosedConnection,
     InputClosed,
     Io(std::io::Error),
@@ -39,6 +40,9 @@ impl std::fmt::Debug for Error {
             Error::NotATerminal => write!(f, "not connected to a terminal"),
             Error::InputClosed => write!(f, "one of data sources is closed"),
             Error::ServerClosedConnection => write!(f, "server closed connection"),
+            Error::ClientShouldCloseConnection => {
+                write!(f, "client should have closed connection, but it didn't")
+            }
             Error::Io(io_err) => io_err.fmt(f),
             Error::Json(json_err) => json_err.fmt(f),
             Error::NulInCString(nul_err) => nul_err.fmt(f),
