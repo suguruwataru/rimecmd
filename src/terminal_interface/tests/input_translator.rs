@@ -1,5 +1,5 @@
-use super::input_translator::InputTranslator;
-use super::Input;
+use crate::terminal_interface::input_translator::InputTranslator;
+use crate::terminal_interface::Input;
 
 #[test]
 fn test_translate_unsupported_character() {

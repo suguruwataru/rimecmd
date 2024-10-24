@@ -7,7 +7,7 @@ mod input_parser;
 
 mod input_translator;
 #[cfg(test)]
-mod test_input_translator;
+mod tests;
 
 #[allow(dead_code)]
 pub enum Input {

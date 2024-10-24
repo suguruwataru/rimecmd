@@ -11,9 +11,8 @@ mod terminal_interface;
 
 #[cfg(test)]
 mod testing_utilities;
-
 #[cfg(test)]
-mod test_rime_api;
+mod tests;
 
 use std::io::Write;
 
