@@ -1,17 +1,20 @@
-pub enum Error<E: std::fmt::Debug> {
+pub enum Error {
     NonUtf8DataHomePath,
     NotATerminal,
     UnsupportedInput,
-    External(E),
+    Io(std::io::Error),
+    Json(serde_json::Error),
+    Xdg(xdg::BaseDirectoriesError),
+    NulInCString(std::ffi::NulError),
 }
 
-impl<E: std::fmt::Debug> From<E> for crate::Error<E> {
-    fn from(source: E) -> Self {
-        Self::External(source)
+impl From<std::io::Error> for crate::Error {
+    fn from(source: std::io::Error) -> Self {
+        Self::Io(source)
     }
 }
 
-impl<E: std::fmt::Debug> std::fmt::Debug for Error<E> {
+impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::NonUtf8DataHomePath => write!(
@@ -20,7 +23,10 @@ impl<E: std::fmt::Debug> std::fmt::Debug for Error<E> {
             ),
             Error::UnsupportedInput => write!(f, "input is not supported"),
             Error::NotATerminal => write!(f, "not connected to a terminal",),
-            Error::External(external_error) => external_error.fmt(f),
+            Error::Io(io_err) => io_err.fmt(f),
+            Error::Json(json_err) => json_err.fmt(f),
+            Error::NulInCString(nul_err) => nul_err.fmt(f),
+            Error::Xdg(xdg_error) => xdg_error.fmt(f),
         }
     }
 }

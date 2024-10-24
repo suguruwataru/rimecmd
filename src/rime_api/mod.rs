@@ -296,13 +296,11 @@ fn rime_schema_from_c(c_rime_schema_item: &CRimeSchemaListItem) -> RimeSchema {
     }
 }
 
-fn c_string_from_path(
-    path: &std::path::Path,
-) -> Result<std::ffi::CString, Error<std::ffi::NulError>> {
+fn c_string_from_path(path: &std::path::Path) -> Result<std::ffi::CString, Error> {
     path.to_str()
         .ok_or(Error::NonUtf8DataHomePath)
         .and_then(|data_home_str| {
-            std::ffi::CString::new(data_home_str).map_err(|err| Error::External(err))
+            std::ffi::CString::new(data_home_str).map_err(|err| Error::NulInCString(err))
         })
 }
 

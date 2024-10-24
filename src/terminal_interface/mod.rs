@@ -62,7 +62,7 @@ pub struct TerminalInterface {
     input_buffer: Vec<Input>,
 }
 
-type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
+type Result<T> = std::result::Result<T, crate::Error>;
 
 impl TerminalInterface {
     pub async fn new() -> Result<Self> {
@@ -75,7 +75,7 @@ impl TerminalInterface {
                 .await
                 .map_err(|io_err| match io_err.kind() {
                     std::io::ErrorKind::NotFound => crate::Error::NotATerminal,
-                    _ => crate::Error::External(io_err),
+                    _ => crate::Error::Io(io_err),
                 })?,
             original_mode: None,
             input_translator: input_translator::InputTranslator::new(),
@@ -270,11 +270,11 @@ impl TerminalInterface {
         }
         let mut original = unsafe { std::mem::zeroed() };
         if -1 == unsafe { libc::tcgetattr(self.tty_file.as_raw_fd(), &mut original) } {
-            return Err(crate::Error::External(std::io::Error::last_os_error()));
+            return Err(crate::Error::Io(std::io::Error::last_os_error()));
         }
         self.original_mode = Some(original);
         if -1 == unsafe { libc::tcsetattr(self.tty_file.as_raw_fd(), libc::TCSADRAIN, &raw) } {
-            return Err(crate::Error::External(std::io::Error::last_os_error()));
+            return Err(crate::Error::Io(std::io::Error::last_os_error()));
         }
         Ok(())
     }
@@ -304,7 +304,7 @@ impl TerminalInterface {
                 )
             }
         {
-            return Err(crate::Error::External(std::io::Error::last_os_error()));
+            return Err(crate::Error::Io(std::io::Error::last_os_error()));
         }
         Ok(())
     }

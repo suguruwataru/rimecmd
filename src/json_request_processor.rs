@@ -14,7 +14,7 @@ pub struct Request {
     pub call: Call,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(
     rename_all = "snake_case",
     tag = "method",
