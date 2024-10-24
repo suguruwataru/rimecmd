@@ -1,8 +1,10 @@
 use crate::json_request_processor::{Outcome, Reply, Request};
+use crate::json_source::JsonSource;
+use crate::poll_request::ReadJson;
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
 use crate::{Call, Config, Effect, Error};
-use std::io::{stdout, Read, Write};
+use std::io::{stdout, Write};
 use std::os::unix::net::UnixStream;
 use uuid::Uuid;
 
@@ -25,39 +27,22 @@ impl<'a> TerminalMode<'a> {
 
     fn main_impl(&mut self) -> Result<(), Error> {
         self.terminal_interface.open()?;
-        let mut stream = UnixStream::connect(&self.config.unix_socket)?;
+        let src = UnixStream::connect(&self.config.unix_socket)?;
+        let mut dst = src.try_clone()?;
+        let mut src = JsonSource::new(src);
         loop {
             let call = self.terminal_interface.next_call()?;
             let reply = match call {
                 call @ Call::ProcessKey { .. } => {
-                    let mut buf = [0; 1024];
-                    let mut json_bytes = vec![];
-                    stream.write(
+                    dst.write(
                         serde_json::to_string(&Request {
                             id: Uuid::new_v4().into(),
                             call,
-                        })
-                        .unwrap()
+                        })?
                         .as_bytes(),
                     )?;
-                    stream.flush()?;
-                    loop {
-                        let count = stream.read(&mut buf)?;
-                        if count == 0 {
-                            return Err(Error::ServerClosedConnection);
-                        }
-                        json_bytes.extend_from_slice(&buf[0..count]);
-                        match serde_json::from_slice::<Reply>(&json_bytes) {
-                            Ok(reply) => break reply,
-                            Err(error) => {
-                                if error.is_eof() {
-                                    continue;
-                                } else {
-                                    return Err(error.into());
-                                }
-                            }
-                        }
-                    }
+                    dst.flush()?;
+                    src.read_json()?
                 }
                 Call::Stop => {
                     self.terminal_interface.close()?;

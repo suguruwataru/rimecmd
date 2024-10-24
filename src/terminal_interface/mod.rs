@@ -1,5 +1,5 @@
 use crate::json_request_processor::Request;
-use crate::poll_request::{PollRequest, RequestSource};
+use crate::poll_request::{PollRequest, ReadJson};
 use crate::rime_api::{RimeComposition, RimeMenu};
 use crate::Call;
 use std::io::{Read, Write};
@@ -66,12 +66,12 @@ pub struct TerminalInterface {
 
 type Result<T> = std::result::Result<T, crate::Error>;
 
-impl RequestSource for TerminalInterface {
-    fn register(&self, poll_request: &mut PollRequest) -> Result<()> {
+impl ReadJson<Request> for TerminalInterface {
+    fn register(&self, poll_request: &mut PollRequest<Request>) -> Result<()> {
         poll_request.register(&self.tty_file.as_raw_fd())
     }
 
-    fn next_request(&mut self) -> Result<Request> {
+    fn read_json(&mut self) -> Result<Request> {
         let call = self.next_call()?;
         Ok(Request {
             id: uuid::Uuid::new_v4().into(),

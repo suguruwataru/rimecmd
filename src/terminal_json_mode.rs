@@ -1,29 +1,28 @@
 use crate::json_request_processor::{JsonRequestProcessor, Outcome, Reply, Request};
 use crate::json_source::JsonSource;
 use crate::key_processor::KeyProcessor;
-use crate::poll_request::{PollRequest, RequestSource};
+use crate::poll_request::{PollRequest, ReadJson};
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
 use crate::Result;
 use crate::{Call, Config, Effect};
 use std::cell::RefCell;
-use std::io::{Read, Write};
-use std::os::fd::AsRawFd;
+use std::io::{Stdin, Write};
 use std::rc::Rc;
 
-pub struct TerminalJsonMode<'a, I: Read + AsRawFd, O: Write> {
+pub struct TerminalJsonMode<'a, O: Write> {
     config: Config,
     terminal_interface: Rc<RefCell<TerminalInterface>>,
-    json_source: Rc<RefCell<JsonSource<I>>>,
+    json_source: Rc<RefCell<JsonSource<Stdin>>>,
     json_dest: O,
     rime_session: RimeSession<'a>,
 }
 
-impl<'a, I: Read + AsRawFd + 'static, O: Write> TerminalJsonMode<'a, I, O> {
+impl<'a, O: Write> TerminalJsonMode<'a, O> {
     pub fn new(
         config: Config,
         terminal_interface: TerminalInterface,
-        json_source: JsonSource<I>,
+        json_source: JsonSource<Stdin>,
         json_dest: O,
         rime_session: RimeSession<'a>,
     ) -> Self {
@@ -43,8 +42,8 @@ impl<'a, I: Read + AsRawFd + 'static, O: Write> TerminalJsonMode<'a, I, O> {
         };
         self.terminal_interface.borrow_mut().open()?;
         let mut poll_request = PollRequest::new(&[
-            Rc::clone(&self.terminal_interface) as Rc<RefCell<dyn RequestSource>>,
-            Rc::clone(&self.json_source) as Rc<RefCell<dyn RequestSource>>,
+            Rc::clone(&self.terminal_interface) as Rc<RefCell<dyn ReadJson<Request>>>,
+            Rc::clone(&self.json_source) as Rc<RefCell<dyn ReadJson<Request>>>,
         ])?;
         loop {
             let request = poll_request.poll();

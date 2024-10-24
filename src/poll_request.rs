@@ -1,25 +1,25 @@
-use crate::json_request_processor::Request;
 use crate::{Error, Result};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
+use serde::de::DeserializeOwned;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::os::fd::AsRawFd;
 use std::rc::Rc;
 
-pub trait RequestSource {
-    fn next_request(&mut self) -> Result<Request>;
-    fn register(&self, poll_request: &mut PollRequest) -> Result<()>;
+pub trait ReadJson<D: DeserializeOwned> {
+    fn read_json(&mut self) -> Result<D>;
+    fn register(&self, poll_request: &mut PollRequest<D>) -> Result<()>;
 }
 
-pub struct PollRequest {
+pub struct PollRequest<D: DeserializeOwned> {
     poll: Poll,
     counter: usize,
-    token_source_map: HashMap<usize, Rc<RefCell<dyn RequestSource>>>,
-    result_buffer: Vec<Request>,
+    token_source_map: HashMap<usize, Rc<RefCell<dyn ReadJson<D>>>>,
+    result_buffer: Vec<D>,
 }
 
-impl PollRequest {
-    pub fn new(sources: &[Rc<RefCell<dyn RequestSource>>]) -> Result<Self> {
+impl<D: DeserializeOwned> PollRequest<D> {
+    pub fn new(sources: &[Rc<RefCell<dyn ReadJson<D>>>]) -> Result<Self> {
         let mut poll_request = Self {
             poll: Poll::new()?,
             counter: 0,
@@ -45,7 +45,7 @@ impl PollRequest {
         Ok(())
     }
 
-    pub fn poll(&mut self) -> Result<Request> {
+    pub fn poll(&mut self) -> Result<D> {
         let mut ret = self.result_buffer.pop();
         if ret.is_some() {
             return Ok(ret.unwrap());
@@ -58,7 +58,7 @@ impl PollRequest {
             }
             assert!(event.is_readable());
             let source = self.token_source_map.get(&event.token().0).unwrap();
-            let request = source.borrow_mut().next_request()?;
+            let request = source.borrow_mut().read_json()?;
             match ret {
                 None => ret = Some(request),
                 Some(_) => self.result_buffer.push(request),

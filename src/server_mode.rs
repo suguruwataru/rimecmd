@@ -1,7 +1,7 @@
 use crate::json_request_processor::{JsonRequestProcessor, Reply, Request};
 use crate::json_source::JsonSource;
 use crate::key_processor::KeyProcessor;
-use crate::poll_request::RequestSource;
+use crate::poll_request::ReadJson;
 use crate::rime_api::RimeSession;
 use crate::Call;
 use crate::Result;
@@ -21,7 +21,7 @@ impl<'a, I: Read + AsRawFd, O: Write> ServerMode<'a, I, O> {
             key_processor: KeyProcessor::new(),
         };
         loop {
-            let request = self.json_source.next_request();
+            let request = self.json_source.read_json();
             let reply = match request {
                 Ok(Request {
                     id: _,
