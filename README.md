@@ -20,7 +20,7 @@ Then, once the build directory is set up, you can always use the following
 command to build the C part.
 
 ```
-meson -C meson/build compile
+meson compile -C build/meson
 ```
 
 After the C part is built, run the Rust build command, and it will

@@ -123,7 +123,7 @@ impl TerminalInterface {
 
     /// Draw the Rime menu.
     ///
-    /// When called, the cursor must be placed where the topleft cell of the menu
+    /// When called, the cursor must be placed one line above where the menu's first line
     /// is to be. The function doesn't do anything special if the space is not enough
     /// to contain the menu. It expects the terminal to automatically scroll so that
     /// enough lines will emerge from the bottom of the terminal to contain everything.
