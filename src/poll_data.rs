@@ -14,7 +14,7 @@ pub struct PollData<D> {
     poll: Poll,
     counter: usize,
     token_source_map: HashMap<usize, Rc<RefCell<dyn ReadData<D>>>>,
-    result_buffer: Vec<D>,
+    result_buffer: std::collections::VecDeque<D>,
 }
 
 impl<D> PollData<D> {
@@ -22,7 +22,7 @@ impl<D> PollData<D> {
         let mut poll_request = Self {
             poll: Poll::new()?,
             counter: 0,
-            result_buffer: vec![],
+            result_buffer: vec![].into(),
             token_source_map: HashMap::new(),
         };
         for source in sources.into_iter() {
@@ -45,7 +45,7 @@ impl<D> PollData<D> {
     }
 
     pub fn poll(&mut self) -> Result<D> {
-        let mut ret = self.result_buffer.pop();
+        let mut ret = self.result_buffer.pop_back();
         if let Some(ret) = ret {
             return Ok(ret);
         }
@@ -60,7 +60,7 @@ impl<D> PollData<D> {
             let data = source.borrow_mut().read_data()?;
             match ret {
                 None => ret = Some(data),
-                Some(_) => self.result_buffer.push(data),
+                Some(_) => self.result_buffer.push_front(data),
             };
         }
         return Ok(ret.unwrap());
