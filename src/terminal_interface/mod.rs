@@ -1,6 +1,7 @@
 use crate::key_processor::{Action, KeyProcessor};
 use std::io::{Read, Write};
 use std::iter::Iterator;
+use std::ops::ControlFlow::{Break, Continue};
 use std::os::fd::AsRawFd;
 
 mod input_parser;
@@ -49,6 +50,24 @@ impl<'a> TerminalInterface<'a> {
         })
     }
 
+    fn read_input(&mut self) -> Result<Input> {
+        let Break(result_input) = std::io::Read::by_ref(&mut self.tty_file).bytes().try_fold(
+            Ok(input_parser::ParserState::new()),
+            |parser_state: Result<input_parser::ParserState>, byte| {
+                let Ok(byte) = byte else {
+                    return Break(Err(byte.unwrap_err()));
+                };
+                match parser_state.unwrap().consume_byte(byte) {
+                    input_parser::ConsumeByteResult::Pending(state) => Continue(Ok(state)),
+                    input_parser::ConsumeByteResult::Completed(input) => Break(Ok(input)),
+                }
+            },
+        ) else {
+            unreachable!()
+        };
+        Ok(result_input?)
+    }
+
     pub fn process_input(&mut self) -> Result<String> {
         let mut height = 0;
         self.enter_raw_mode()?;
@@ -58,25 +77,7 @@ impl<'a> TerminalInterface<'a> {
         write!(self.tty_file, "> ")?;
         self.tty_file.flush()?;
         loop {
-            let std::ops::ControlFlow::Break(input) =
-                std::io::Read::by_ref(&mut self.tty_file).bytes().try_fold(
-                    input_parser::ParserState::new(),
-                    |parser_state, maybe_byte| {
-                        let byte = maybe_byte.unwrap();
-                        match parser_state.consume_byte(byte) {
-                            input_parser::ConsumeByteResult::Pending(state) => {
-                                std::ops::ControlFlow::Continue(state)
-                            }
-                            input_parser::ConsumeByteResult::Completed(input) => {
-                                std::ops::ControlFlow::Break(input)
-                            }
-                        }
-                    },
-                )
-            else {
-                unreachable!()
-            };
-            match input {
+            match self.read_input()? {
                 Input::Etx => {
                     self.cursor_up(height)?;
                     self.carriage_return()?;
