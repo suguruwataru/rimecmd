@@ -491,11 +491,11 @@ impl RimeApi {
                         user_data_dir.as_ptr(),
                         shared_data_dir.as_ptr(),
                         match log_level {
-                            LogLevel::INFO => 0,
-                            LogLevel::WARNING => 1,
-                            LogLevel::ERROR => 2,
-                            LogLevel::FATAL => 3,
-                            LogLevel::OFF => 4,
+                            LogLevel::Info => 0,
+                            LogLevel::Warning => 1,
+                            LogLevel::Error => 2,
+                            LogLevel::Fatal => 3,
+                            LogLevel::None => 4,
                         },
                     )
                 });
@@ -505,11 +505,11 @@ impl RimeApi {
                         user_data_dir.as_ptr(),
                         shared_data_dir.as_ptr(),
                         match log_level {
-                            LogLevel::INFO => 0,
-                            LogLevel::WARNING => 1,
-                            LogLevel::ERROR => 2,
-                            LogLevel::FATAL => 3,
-                            LogLevel::OFF => 4,
+                            LogLevel::Info => 0,
+                            LogLevel::Warning => 1,
+                            LogLevel::Error => 2,
+                            LogLevel::Fatal => 3,
+                            LogLevel::None => 4,
                         },
                     );
                 }
@@ -555,13 +555,13 @@ impl RimeApi {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, clap::ValueEnum)]
 pub enum LogLevel {
-    INFO,
-    WARNING,
-    ERROR,
-    FATAL,
-    OFF,
+    Info,
+    Warning,
+    Error,
+    Fatal,
+    None,
 }
 
 #[cfg(test)]

@@ -10,4 +10,4 @@ pub fn temporary_directory_path() -> String {
 /// Logging in Rime can only be initilized once per process.
 /// Thus, it only makes sense if all tests are initialized
 /// with the same parameters.
-pub static LOG_LEVEL: LogLevel = LogLevel::OFF;
+pub static LOG_LEVEL: LogLevel = LogLevel::None;
