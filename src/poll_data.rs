@@ -73,7 +73,7 @@ impl<D> PollData<D> {
         };
         for event in events.into_iter() {
             if event.events & libc::EPOLLHUP as u32 != 0 {
-                return Err(Error::InputClosed);
+                return Err(Error::OneOfMultipleInputClosed);
             }
             assert!(event.events & libc::EPOLLIN as u32 != 0);
             let source = self

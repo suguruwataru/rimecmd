@@ -116,7 +116,7 @@ impl Session {
         loop {
             let count = client_stream.read(&mut buf)?;
             if count == 0 {
-                break Err(Error::InputClosed);
+                break Err(Error::OneOfMultipleInputClosed);
             }
             json_bytes.extend_from_slice(&buf[0..count]);
             match serde_json::from_slice::<Request>(&json_bytes) {
@@ -153,7 +153,7 @@ impl Session {
                     },
                     // TODO The client can close connection at any point.
                     // Sometimes it's worth logging it.
-                    Err(Error::InputClosed) => return Ok(()),
+                    Err(Error::OneOfMultipleInputClosed) => return Ok(()),
                     Err(err) => {
                         return Err(err);
                     }
@@ -203,7 +203,7 @@ impl Session {
 
     fn check_client_stream_closed(client_stream: &mut UnixStream) -> Result<()> {
         match Self::read_request(client_stream) {
-            Err(Error::InputClosed) => Ok(()),
+            Err(Error::OneOfMultipleInputClosed) => Ok(()),
             Ok(_) => Err(Error::ClientShouldCloseConnection),
             Err(err) => Err(err.into()),
         }

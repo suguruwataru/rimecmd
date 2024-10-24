@@ -8,7 +8,7 @@ pub enum Error {
     UnixSocketAlreadyExists,
     ConfigNotFound(String),
     OptionNotFound(String),
-    InputClosed,
+    OneOfMultipleInputClosed,
     Io(std::io::Error),
     Json(serde_json::Error),
     Xdg(xdg::BaseDirectoriesError),
@@ -48,7 +48,7 @@ impl std::fmt::Debug for Error {
             ),
             Error::UnsupportedInput => write!(f, "input is not supported"),
             Error::NotATerminal => write!(f, "not connected to a terminal"),
-            Error::InputClosed => write!(f, "one of data sources is closed"),
+            Error::OneOfMultipleInputClosed => write!(f, "one of data sources is closed"),
             Error::ServerClosedConnection => write!(f, "server closed connection"),
             Error::ClientShouldCloseConnection => {
                 write!(f, "client should have closed connection, but it didn't")
