@@ -215,8 +215,8 @@ pub struct RimeStatus {
 
 pub struct RimeApi {
     c_rime_api: *mut CRimeApi,
-    _user_data_dir: std::pin::Pin<std::boxed::Box<std::ffi::CString>>,
-    _shared_data_dir: std::pin::Pin<std::boxed::Box<std::ffi::CString>>,
+    _user_data_dir: std::boxed::Box<std::ffi::CString>,
+    _shared_data_dir: std::boxed::Box<std::ffi::CString>,
 }
 
 impl Drop for RimeApi {
@@ -415,9 +415,9 @@ impl RimeApi {
         P2: AsRef<std::path::Path>,
     {
         let user_data_dir =
-            std::boxed::Box::pin(c_string_from_path(user_data_dir.as_ref()).unwrap());
+            std::boxed::Box::new(c_string_from_path(user_data_dir.as_ref()).unwrap());
         let shared_data_dir =
-            std::boxed::Box::pin(c_string_from_path(shared_data_dir.as_ref()).unwrap());
+            std::boxed::Box::new(c_string_from_path(shared_data_dir.as_ref()).unwrap());
         Self {
             c_rime_api: unsafe {
                 c_create_rime_api(
