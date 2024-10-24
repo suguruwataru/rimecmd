@@ -5,17 +5,17 @@ use crate::poll_data::ReadData;
 use crate::rime_api::RimeSession;
 use crate::Effect;
 use crate::{Error, Result};
-use std::io::{Read, Write};
-use std::os::fd::AsRawFd;
+use std::io::Write;
+use std::os::unix::net::UnixStream;
 
-pub struct ServerMode<'a, I: Read + AsRawFd, O: Write> {
-    pub json_source: JsonSource<I>,
-    pub json_dest: O,
+pub struct ServerMode<'a> {
+    pub json_source: JsonSource<UnixStream>,
+    pub json_dest: UnixStream,
     pub rime_session: RimeSession<'a>,
 }
 
-impl<'a, I: Read + AsRawFd, O: Write> ServerMode<'a, I, O> {
-    pub fn main(&mut self) -> Result<()> {
+impl<'a> ServerMode<'a> {
+    pub fn main(mut self) -> Result<()> {
         let json_request_processor = JsonRequestProcessor {
             rime_session: &self.rime_session,
             key_processor: KeyProcessor::new(),
