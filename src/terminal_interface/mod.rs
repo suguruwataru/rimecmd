@@ -118,6 +118,11 @@ impl<'a> TerminalInterface<'a> {
         Ok(height)
     }
 
+    fn draw_composition(&mut self, composition: crate::rime_api::RimeComposition) -> Result<()> {
+        write!(self.tty_file, "> {}", composition.preedit)?;
+        Ok(())
+    }
+
     pub fn process_input(&mut self) -> Result<Option<String>> {
         let mut height = 0;
         self.enter_raw_mode()?;
@@ -142,11 +147,11 @@ impl<'a> TerminalInterface<'a> {
                         unimplemented!()
                     };
                     match self.key_processor.process_key(keycode, mask) {
-                        Action::UpdateUi { preedit, menu } => {
+                        Action::UpdateUi { composition, menu } => {
                             self.cursor_up(height)?;
                             self.carriage_return()?;
                             height = self.draw_menu(menu)?;
-                            write!(self.tty_file, "> {}", preedit)?;
+                            self.draw_composition(composition)?;
                             self.erase_after()?;
                             self.tty_file.flush()?;
                         }

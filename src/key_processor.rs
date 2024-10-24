@@ -1,8 +1,11 @@
-use crate::rime_api::{RimeMenu, RimeSession};
+use crate::rime_api::{RimeComposition, RimeMenu, RimeSession};
 
 pub enum Action {
     CommitString(String),
-    UpdateUi { preedit: String, menu: RimeMenu },
+    UpdateUi {
+        composition: RimeComposition,
+        menu: RimeMenu,
+    },
 }
 
 pub struct KeyProcessor<'a> {
@@ -21,7 +24,7 @@ impl<'a> KeyProcessor<'a> {
         } else {
             let context = self.rime_session.get_context();
             Action::UpdateUi {
-                preedit: context.composition.preedit,
+                composition: context.composition,
                 menu: context.menu,
             }
         }
@@ -46,7 +49,7 @@ mod test {
         let report = key_processor.process_key(109 /* m */, 0);
         assert_eq!(
             match report {
-                Action::UpdateUi { preedit, menu } => (preedit, menu.page_size),
+                Action::UpdateUi { composition, menu } => (composition.preedit, menu.page_size),
                 _ => panic!(),
             },
             ("m".into(), 5),
@@ -54,7 +57,7 @@ mod test {
         let report = key_processor.process_key(73 /* I */, 0);
         assert_eq!(
             match report {
-                Action::UpdateUi { preedit, menu } => (preedit, menu.page_size),
+                Action::UpdateUi { composition, menu } => (composition.preedit, menu.page_size),
                 _ => panic!(),
             },
             ("骂I".into(), 0),
@@ -62,7 +65,7 @@ mod test {
         let response = key_processor.process_key(78 /* N */, 0);
         assert_eq!(
             match response {
-                Action::UpdateUi { preedit, menu } => (preedit, menu.page_size),
+                Action::UpdateUi { composition, menu } => (composition.preedit, menu.page_size),
                 _ => panic!(),
             },
             ("骂IN".into(), 0),
@@ -70,7 +73,7 @@ mod test {
         let report = key_processor.process_key(89 /* Y */, 0);
         assert_eq!(
             match report {
-                Action::UpdateUi { preedit, menu } => (preedit, menu.page_size),
+                Action::UpdateUi { composition, menu } => (composition.preedit, menu.page_size),
                 _ => panic!(),
             },
             ("骂INY".into(), 0),
