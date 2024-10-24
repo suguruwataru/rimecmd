@@ -62,7 +62,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rimed"
+name = "rimecmd"
 version = "0.1.0"
 dependencies = [
  "libc",

@@ -5,7 +5,7 @@ use std::sync::Once;
 
 static RIME_API_SETUP: Once = Once::new();
 
-#[link(name = "rimed", kind = "static")]
+#[link(name = "rimecmd", kind = "static")]
 extern "C" {
     fn c_get_rime_api() -> *mut CRimeApi;
     fn c_setup_rime_api_once(
@@ -34,15 +34,15 @@ extern "C" {
     fn c_get_status(
         rime_api: *mut CRimeApi,
         session_id: usize,
-        status: *mut CRimedRimeStatus,
+        status: *mut CRimecmdRimeStatus,
     ) -> c_void;
-    fn c_free_status(status: *mut CRimedRimeStatus) -> c_void;
+    fn c_free_status(status: *mut CRimecmdRimeStatus) -> c_void;
     fn c_get_commit(
         rime_api: *mut CRimeApi,
         session_id: usize,
-        commit: *mut CRimedRimeCommit,
+        commit: *mut CRimecmdRimeCommit,
     ) -> c_void;
-    fn c_free_commit(commit: *mut CRimedRimeCommit) -> c_void;
+    fn c_free_commit(commit: *mut CRimecmdRimeCommit) -> c_void;
     fn c_process_key(
         rime_api: *mut CRimeApi,
         session_id: usize,
@@ -52,9 +52,9 @@ extern "C" {
     fn c_get_context(
         rime_api: *mut CRimeApi,
         session_id: usize,
-        context: *mut CRimedRimeContext,
+        context: *mut CRimecmdRimeContext,
     ) -> c_void;
-    fn c_free_context(context: *mut CRimedRimeContext) -> c_void;
+    fn c_free_context(context: *mut CRimecmdRimeContext) -> c_void;
     fn c_get_current_schema(
         rime_api: *mut CRimeApi,
         session_id: usize,
@@ -105,7 +105,7 @@ struct CRimeCandidateListIterator {
 }
 
 #[repr(C)]
-struct CRimedRimeComposition {
+struct CRimecmdRimeComposition {
     length: c_int,
     cursor_pos: c_int,
     sel_start: c_int,
@@ -122,16 +122,18 @@ pub struct RimeComposition {
     pub preedit: String,
 }
 
-fn rime_composition_from_c(c_rimed_rime_composition: &CRimedRimeComposition) -> RimeComposition {
+fn rime_composition_from_c(
+    c_rimecmd_rime_composition: &CRimecmdRimeComposition,
+) -> RimeComposition {
     RimeComposition {
-        length: c_rimed_rime_composition.length as usize,
-        cursor_pos: c_rimed_rime_composition.cursor_pos as usize,
-        sel_start: c_rimed_rime_composition.sel_start as usize,
-        sel_end: c_rimed_rime_composition.sel_end as usize,
-        preedit: if c_rimed_rime_composition.preedit.is_null() {
+        length: c_rimecmd_rime_composition.length as usize,
+        cursor_pos: c_rimecmd_rime_composition.cursor_pos as usize,
+        sel_start: c_rimecmd_rime_composition.sel_start as usize,
+        sel_end: c_rimecmd_rime_composition.sel_end as usize,
+        preedit: if c_rimecmd_rime_composition.preedit.is_null() {
             "".into()
         } else {
-            unsafe { std::ffi::CStr::from_ptr(c_rimed_rime_composition.preedit) }
+            unsafe { std::ffi::CStr::from_ptr(c_rimecmd_rime_composition.preedit) }
                 .to_str()
                 .unwrap()
                 .to_owned()
@@ -140,8 +142,8 @@ fn rime_composition_from_c(c_rimed_rime_composition: &CRimedRimeComposition) -> 
 }
 
 #[repr(C)]
-struct CRimedRimeContext {
-    composition: CRimedRimeComposition,
+struct CRimecmdRimeContext {
+    composition: CRimecmdRimeComposition,
     menu: CRimeMenu,
     commit_text_preview: *mut c_char,
 }
@@ -225,7 +227,7 @@ struct CRimeSchemaList {
 }
 
 #[repr(C)]
-struct CRimedRimeStatus {
+struct CRimecmdRimeStatus {
     schema_id: *mut c_char,
     schema_name: *mut c_char,
     is_disabled: c_int,
@@ -238,7 +240,7 @@ struct CRimedRimeStatus {
 }
 
 #[repr(C)]
-struct CRimedRimeCommit {
+struct CRimecmdRimeCommit {
     text: *mut c_char,
 }
 
@@ -329,9 +331,9 @@ impl<'a> RimeSession<'a> {
     }
 
     pub fn get_context(&self) -> RimeContext {
-        let mut c_context = CRimedRimeContext {
+        let mut c_context = CRimecmdRimeContext {
             commit_text_preview: std::ptr::null_mut(),
-            composition: CRimedRimeComposition {
+            composition: CRimecmdRimeComposition {
                 sel_end: 0,
                 sel_start: 0,
                 length: 0,
@@ -370,7 +372,7 @@ impl<'a> RimeSession<'a> {
     }
 
     pub fn get_commit(&self) -> RimeCommit {
-        let mut c_commit = CRimedRimeCommit {
+        let mut c_commit = CRimecmdRimeCommit {
             text: std::ptr::null_mut(),
         };
         unsafe {
@@ -391,7 +393,7 @@ impl<'a> RimeSession<'a> {
     }
 
     pub fn get_status(&self) -> RimeStatus {
-        let mut c_status = CRimedRimeStatus {
+        let mut c_status = CRimecmdRimeStatus {
             schema_id: std::ptr::null_mut(),
             schema_name: std::ptr::null_mut(),
             is_disabled: 0,

@@ -11,7 +11,7 @@ mod testing_utilities;
 use std::io::{stdout, Write};
 
 fn main() {
-    let data_home = xdg::BaseDirectories::with_prefix("rimed")
+    let data_home = xdg::BaseDirectories::with_prefix("rimecmd")
         .map_err(|err| Error::External(err))
         .map(|xdg_directories| xdg_directories.get_data_home())
         .unwrap();
