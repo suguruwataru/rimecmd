@@ -55,11 +55,13 @@ struct Args {
     json_schema: Option<PrintJsonSchemaFor>,
 }
 
-async fn next_call_from_stdin() -> std::result::Result<Call, crate::Error> {
+async fn next_call_from_stdin(
+    stdin: &mut tokio::io::Stdin,
+) -> std::result::Result<Call, crate::Error> {
     let mut buf = [0u8; 1024];
     let mut json_bytes = vec![];
     loop {
-        let count = tokio::io::stdin().read(&mut buf).await?;
+        let count = stdin.read(&mut buf).await?;
         if count == 0 {
             break Err(Error::UnsupportedInput);
         }
@@ -109,19 +111,23 @@ async fn main() -> ExitCode {
     let rime_session = rime_api::RimeSession::new(&rime_api);
     let maybe_terminal_interface = terminal_interface::TerminalInterface::new().await;
     let key_processor = key_processor::KeyProcessor::new();
+    let mut stdin = tokio::io::stdin();
     match maybe_terminal_interface {
         Ok(mut terminal_interface) => {
             terminal_interface.open().await.unwrap();
             loop {
                 let call = if args.json {
                     tokio::select! {
-                        call = next_call_from_stdin() => call,
+                        call = next_call_from_stdin(&mut stdin) => call,
                         call = terminal_interface.next_call() => call,
                     }
-                    .unwrap()
                 } else {
-                    terminal_interface.next_call().await.unwrap()
-                };
+                    terminal_interface.next_call().await
+                }
+                .unwrap();
+                if let Call::Stop = call {
+                    break;
+                }
                 let action = match call {
                     Call::ProcessKey { keycode, mask } => {
                         key_processor.process_key(&rime_session, keycode, mask)
