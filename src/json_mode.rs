@@ -4,20 +4,13 @@ use crate::Effect;
 use crate::Result;
 use std::cell::RefCell;
 use std::io::{stdin, stdout, Read, Write};
-use std::os::unix::net::UnixStream;
 use std::rc::Rc;
 
 use crate::client::ServerReply;
 use crate::poll_data::{PollData, ReadData};
 
-#[allow(dead_code)]
-pub enum Bytes {
+enum Input {
     StdinBytes(Vec<u8>),
-    ServerBytes(Vec<u8>),
-}
-
-pub enum Input {
-    Stdin(Vec<u8>),
     ServerReply(ServerReply),
 }
 
@@ -27,52 +20,38 @@ impl From<ServerReply> for Input {
     }
 }
 
+impl From<Vec<u8>> for Input {
+    fn from(source: Vec<u8>) -> Self {
+        Self::StdinBytes(source)
+    }
+}
+
 pub struct JsonMode {
     client: Client,
-    continue_mode: bool,
 }
 
 pub struct Stdin {
     pub stdin: std::io::Stdin,
 }
 
-pub struct ServerReader {
-    pub stream: UnixStream,
-}
-
-impl ReadData<Input> for Stdin {
-    fn read_data(&mut self) -> Result<Input> {
+impl<D: From<Vec<u8>>> ReadData<D> for Stdin {
+    fn read_data(&mut self) -> Result<D> {
         let mut buf = [0; 1024];
         let count = self.stdin.read(&mut buf)?;
-        Ok(Input::Stdin(Vec::from(&buf[0..count])))
+        Ok(Vec::from(&buf[0..count]).into())
     }
-    fn register(&self, poll_data: &mut PollData<Input>) -> Result<()> {
+    fn register(&self, poll_data: &mut PollData<D>) -> Result<()> {
         poll_data.register(&self.stdin)?;
         Ok(())
     }
 }
 
-impl ReadData<Bytes> for ServerReader {
-    fn read_data(&mut self) -> Result<Bytes> {
-        let mut buf = [0; 1024];
-        let count = self.stream.read(&mut buf)?;
-        Ok(Bytes::ServerBytes(Vec::from(&buf[0..count])))
-    }
-    fn register(&self, poll_data: &mut PollData<Bytes>) -> Result<()> {
-        poll_data.register(&self.stream)?;
-        Ok(())
-    }
-}
-
 impl JsonMode {
-    pub fn new(client: Client, continue_mode: bool) -> Self {
-        Self {
-            client,
-            continue_mode,
-        }
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
-    pub fn main(self) -> Result<()> {
+    pub fn main(self, continue_mode: bool) -> Result<()> {
         let client = Rc::new(RefCell::new(self.client));
         let stdin = Rc::new(RefCell::new(Stdin { stdin: stdin() }));
         let mut poll_data = PollData::<Input>::new(&[
@@ -82,7 +61,7 @@ impl JsonMode {
         loop {
             let data = poll_data.poll()?;
             match data {
-                Input::Stdin(bytes) => {
+                Input::StdinBytes(bytes) => {
                     client.borrow_mut().send_bytes(&bytes)?;
                 }
                 Input::ServerReply(ServerReply::Complete(reply)) => {
@@ -99,7 +78,7 @@ impl JsonMode {
                             outcome: Outcome::Effect(Effect::CommitString(_)),
                             ..
                         } => {
-                            if !self.continue_mode {
+                            if !continue_mode {
                                 break;
                             }
                         }

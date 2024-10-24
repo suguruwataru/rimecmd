@@ -1,7 +1,6 @@
 use crate::json_request_processor::Request;
 use crate::poll_data::{PollData, ReadData};
 use crate::rime_api::{RimeComposition, RimeMenu};
-use crate::terminal_json_mode::Data;
 use crate::Call;
 use std::io::{Read, Write};
 /// This module includes that code that interacts with a text terminal
@@ -67,26 +66,18 @@ pub struct TerminalInterface {
 
 type Result<T> = std::result::Result<T, crate::Error>;
 
-impl ReadData<Request> for TerminalInterface {
-    fn register(&self, poll_request: &mut PollData<Request>) -> Result<()> {
+impl<D: From<Request>> ReadData<D> for TerminalInterface {
+    fn register(&self, poll_request: &mut PollData<D>) -> Result<()> {
         poll_request.register(&self.tty_file.as_raw_fd())
     }
 
-    fn read_data(&mut self) -> Result<Request> {
+    fn read_data(&mut self) -> Result<D> {
         let call = self.next_call()?;
         Ok(Request {
             id: uuid::Uuid::new_v4().into(),
             call,
-        })
-    }
-}
-
-impl ReadData<Data> for TerminalInterface {
-    fn read_data(&mut self) -> Result<Data> {
-        Ok(Data::TerminalRequest(ReadData::<Request>::read_data(self)?))
-    }
-    fn register(&self, poll_request: &mut PollData<Data>) -> Result<()> {
-        poll_request.register(&self.tty_file.as_raw_fd())
+        }
+        .into())
     }
 }
 

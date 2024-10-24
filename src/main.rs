@@ -219,15 +219,15 @@ fn rimecmd() -> Result<()> {
     if args.json {
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
-            return TerminalJsonMode::new(config, terminal_interface).main();
+            return TerminalJsonMode::new(client, terminal_interface).main(args.continue_mode);
         } else {
-            return JsonMode::new(client, args.continue_mode).main();
+            return JsonMode::new(client).main(args.continue_mode);
         };
     }
     let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
     match maybe_terminal_interface {
         Ok(terminal_interface) => return TerminalMode::new(config, terminal_interface).main(),
-        Err(Error::NotATerminal) => return JsonMode::new(client, args.continue_mode).main(),
+        Err(Error::NotATerminal) => return JsonMode::new(client).main(args.continue_mode),
         err => {
             err?;
         }

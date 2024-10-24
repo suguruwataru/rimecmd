@@ -35,6 +35,7 @@ impl ServerMode {
         let stop_sender = Arc::new(Mutex::new(stop_sender));
         thread::spawn(move || loop {
             let _error: Error = error_receiver.recv().unwrap();
+            eprintln!("{:?}", _error);
             todo!("implement error logging");
         });
         let rime_api = Arc::new(Mutex::new(RimeApi::new(
@@ -92,7 +93,7 @@ impl Session {
             rime_session: &self.rime_session,
             key_processor: KeyProcessor::new(),
         };
-        let stop_server = loop {
+        loop {
             let request = self.json_source.read_data();
             let reply = match request {
                 Ok(request) => json_request_processor.process_request(request),
@@ -101,6 +102,9 @@ impl Session {
                         id: None,
                         outcome: err_outcome,
                     },
+                    // TODO The client can close connection at any point.
+                    // Sometimes it's worth logging it.
+                    Err(Error::InputClosed) => return Ok(()),
                     Err(err) => {
                         return Err(err);
                     }
@@ -125,9 +129,9 @@ impl Session {
                 }
                 _ => (),
             }
-        };
+        }
         match self.json_source.read_data() {
-            Err(Error::InputClosed) => Ok(stop_server),
+            Err(Error::InputClosed) => Ok(()),
             Ok(_) => Err(Error::ClientShouldCloseConnection),
             other => other,
         }
