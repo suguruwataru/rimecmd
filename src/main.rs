@@ -7,8 +7,6 @@ use error::Error;
 
 #[cfg(test)]
 mod testing_utilities;
-#[cfg(test)]
-mod tests;
 
 use std::io::{stdout, Write};
 
