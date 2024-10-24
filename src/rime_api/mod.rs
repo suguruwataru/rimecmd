@@ -264,6 +264,7 @@ fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize, menu: &CRimeMenu)
 
 #[derive(Debug)]
 pub struct RimeContext {
+    #[allow(dead_code)]
     pub commit_text_preview: String,
     pub composition: RimeComposition,
     pub menu: RimeMenu,
@@ -314,6 +315,7 @@ pub struct RimeCommit {
     pub text: Option<String>,
 }
 
+#[allow(dead_code)]
 pub struct RimeStatus {
     pub schema_id: String,
     pub schema_name: String,
