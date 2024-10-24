@@ -1,12 +1,10 @@
-use crate::json_request_processor::{JsonRequestProcessor, Outcome, Reply};
-use crate::json_source::JsonSource;
+use crate::json_request_processor::{JsonRequestProcessor, Outcome, Reply, Request};
 use crate::key_processor::KeyProcessor;
-use crate::poll_data::ReadData;
 use crate::rime_api::{RimeApi, RimeSession};
 use crate::Config;
 use crate::Effect;
 use crate::{Error, Result};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
 use std::sync::{
@@ -56,18 +54,9 @@ impl ServerMode {
                 let stop_sender = Arc::clone(&stop_sender);
                 let rime_api = Arc::clone(&rime_api);
                 thread::spawn(move || {
-                    let rime_session = RimeSession::new(rime_api);
-                    let input_stream = match stream.try_clone() {
-                        Ok(stream) => stream,
-                        Err(error) => {
-                            error_sender.lock().unwrap().send(error.into()).unwrap();
-                            return ();
-                        }
-                    };
                     Session {
-                        json_source: JsonSource::new(input_stream),
-                        json_dest: stream,
-                        rime_session,
+                        client_stream: stream,
+                        rime_session: RimeSession::new(rime_api),
                         stop_sender,
                     }
                     .run()
@@ -81,20 +70,45 @@ impl ServerMode {
 }
 
 struct Session {
-    json_source: JsonSource<UnixStream>,
-    json_dest: UnixStream,
+    client_stream: UnixStream,
     rime_session: RimeSession,
     stop_sender: Arc<Mutex<Sender<()>>>,
 }
 
 impl Session {
-    pub fn run(mut self) -> Result<()> {
+    fn read_request(client_stream: &mut UnixStream) -> Result<Request> {
+        let mut buf = [0u8; 1024];
+        let mut json_bytes = vec![];
+        loop {
+            let count = client_stream.read(&mut buf)?;
+            if count == 0 {
+                break Err(Error::InputClosed);
+            }
+            json_bytes.extend_from_slice(&buf[0..count]);
+            match serde_json::from_slice::<Request>(&json_bytes) {
+                Ok(request) => break Ok(request),
+                Err(err) => {
+                    if err.is_eof() {
+                        continue;
+                    }
+                    break Err(crate::Error::Json(err));
+                }
+            };
+        }
+    }
+
+    pub fn run(self) -> Result<()> {
+        let Self {
+            rime_session,
+            stop_sender,
+            mut client_stream,
+        } = self;
         let json_request_processor = JsonRequestProcessor {
-            rime_session: &self.rime_session,
+            rime_session: &rime_session,
             key_processor: KeyProcessor::new(),
         };
         loop {
-            let request = self.json_source.read_data();
+            let request = Self::read_request(&mut client_stream);
             let reply = match request {
                 Ok(request) => json_request_processor.process_request(request),
                 Err(err) => match err.try_into() {
@@ -110,9 +124,8 @@ impl Session {
                     }
                 },
             };
-            self.json_dest
-                .write(serde_json::to_string(&reply)?.as_bytes())?;
-            self.json_dest.flush()?;
+            client_stream.write(serde_json::to_string(&reply)?.as_bytes())?;
+            client_stream.flush()?;
             match reply {
                 Reply {
                     outcome: Outcome::Effect(Effect::StopClient),
@@ -124,16 +137,16 @@ impl Session {
                     outcome: Outcome::Effect(Effect::StopServer),
                     ..
                 } => {
-                    self.stop_sender.lock().unwrap().send(()).unwrap();
+                    stop_sender.lock().unwrap().send(()).unwrap();
                     break;
                 }
                 _ => (),
             }
         }
-        match self.json_source.read_data() {
+        match Self::read_request(&mut client_stream) {
             Err(Error::InputClosed) => Ok(()),
             Ok(_) => Err(Error::ClientShouldCloseConnection),
-            other => other,
+            Err(err) => Err(err.into()),
         }
     }
 }
