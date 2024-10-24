@@ -1,8 +1,3 @@
-use crate::json_request_processor::Request;
-use crate::poll_data::{PollData, ReadData};
-use crate::rime_api::{RimeComposition, RimeMenu};
-use crate::Call;
-use std::io::{Read, Write};
 /// This module includes that code that interacts with a text terminal
 ///
 /// This module interacts with a terminal using console_codes(4). In
@@ -17,6 +12,12 @@ use std::io::{Read, Write};
 /// wrong with. Also, with today's terminals, which generally support a
 /// similar set of codes, and the limited terminal functions this program
 /// uses, `terminfo` hardly makes a difference.
+use crate::json_request_processor::Request;
+use crate::poll_data::{PollData, ReadData};
+use crate::rime_api::{RimeComposition, RimeMenu};
+use crate::Call;
+use std::collections::VecDeque;
+use std::io::{Read, Write};
 use std::iter::Iterator;
 use std::num::NonZeroUsize;
 use std::os::fd::AsRawFd;
@@ -61,7 +62,7 @@ pub struct TerminalInterface {
     tty_file: std::fs::File,
     original_mode: Option<libc::termios>,
     input_translator: input_translator::InputTranslator,
-    input_buffer: Vec<Input>,
+    input_buffer: VecDeque<Input>,
 }
 
 type Result<T> = std::result::Result<T, crate::Error>;
@@ -84,7 +85,7 @@ impl<D: From<Request>> ReadData<D> for TerminalInterface {
 impl TerminalInterface {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            input_buffer: vec![],
+            input_buffer: vec![].into(),
             tty_file: std::fs::OpenOptions::new()
                 .read(true)
                 .write(true)
@@ -198,7 +199,7 @@ impl TerminalInterface {
             if let Input::CursorPositionReport { row, col } = input {
                 break Ok((row, col));
             } else {
-                self.input_buffer.push(input);
+                self.input_buffer.push_back(input);
             }
         }
     }
@@ -216,7 +217,7 @@ impl TerminalInterface {
     }
 
     pub fn next_call(&mut self) -> Result<Call> {
-        let input = match self.input_buffer.pop() {
+        let input = match self.input_buffer.pop_front() {
             Some(input) => input,
             None => self.read_input()?,
         };
