@@ -73,6 +73,8 @@ impl JsonMode {
                     server_writer.flush()?;
                 }
                 Bytes::ServerBytes(bytes) => {
+                    stdout().write(&bytes)?;
+                    stdout().flush()?;
                     match serde_json::from_slice(&bytes)? {
                         Reply {
                             outcome: Outcome::Effect(Effect::StopClient | Effect::StopServer),
@@ -83,8 +85,6 @@ impl JsonMode {
                         }
                         _ => (),
                     }
-                    stdout().write(&bytes)?;
-                    stdout().flush()?;
                 }
             }
         }

@@ -9,7 +9,10 @@ use crate::{Error, Result};
 use std::io::Write;
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
-use std::sync::{mpsc::channel, Arc, Mutex};
+use std::sync::{
+    mpsc::{channel, Sender},
+    Arc, Mutex,
+};
 use std::thread;
 
 pub struct ServerMode {
@@ -60,18 +63,14 @@ impl ServerMode {
                             return ();
                         }
                     };
-                    if (Session {
+                    Session {
                         json_source: JsonSource::new(input_stream),
                         json_dest: stream,
                         rime_session,
-                    })
-                    .run()
-                    .unwrap_or_else(|err| {
-                        error_sender.lock().unwrap().send(err).unwrap();
-                        false
-                    }) {
-                        stop_sender.lock().unwrap().send(()).unwrap();
+                        stop_sender,
                     }
+                    .run()
+                    .unwrap_or_else(|err| error_sender.lock().unwrap().send(err).unwrap());
                 });
             }
         });
@@ -84,11 +83,11 @@ struct Session {
     json_source: JsonSource<UnixStream>,
     json_dest: UnixStream,
     rime_session: RimeSession,
+    stop_sender: Arc<Mutex<Sender<()>>>,
 }
 
 impl Session {
-    /// On success, return whether the whole server should stop.
-    pub fn run(mut self) -> Result<bool> {
+    pub fn run(mut self) -> Result<()> {
         let json_request_processor = JsonRequestProcessor {
             rime_session: &self.rime_session,
             key_processor: KeyProcessor::new(),
@@ -115,13 +114,14 @@ impl Session {
                     outcome: Outcome::Effect(Effect::StopClient),
                     ..
                 } => {
-                    break false;
+                    break;
                 }
                 Reply {
                     outcome: Outcome::Effect(Effect::StopServer),
                     ..
                 } => {
-                    break true;
+                    self.stop_sender.lock().unwrap().send(()).unwrap();
+                    break;
                 }
                 _ => (),
             }
