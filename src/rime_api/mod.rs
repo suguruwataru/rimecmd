@@ -115,7 +115,7 @@ struct CRimecmdRimeComposition {
     preedit: *mut c_char,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct RimeComposition {
     pub length: usize,
@@ -151,14 +151,14 @@ struct CRimecmdRimeContext {
     commit_text_preview: *mut c_char,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct RimeCandidate {
     pub text: String,
     pub comment: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct RimeMenu {
     pub candidates: Vec<RimeCandidate>,

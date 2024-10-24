@@ -4,10 +4,9 @@ mod json_request_processor;
 mod key_processor;
 #[allow(dead_code)]
 mod rime_api;
-mod stdin_interface;
 mod terminal_interface;
 use error::Error;
-use json_request_processor::Call;
+use json_request_processor::{Call, Reply, Result};
 use key_processor::Action;
 
 #[cfg(test)]
@@ -80,61 +79,59 @@ fn main() -> ExitCode {
         .unwrap();
     let rime_api = rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
     let rime_session = rime_api::RimeSession::new(&rime_api);
-    if args.json {
-        if args.continue_mode {
-            todo!("conflicting args")
-        }
-        loop {
-            match stdin_interface::StdinInterface::new(
-                json_request_processor::JsonRequestProcessor::new(),
-            )
-            .process_input(&rime_session)
-            {
-                Ok(reply) => {
-                    writeln!(stdout(), "{}", serde_json::to_string(&reply).unwrap()).unwrap();
+    let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
+    let key_processor = key_processor::KeyProcessor::new();
+    match maybe_terminal_interface {
+        Ok(mut terminal_interface) => {
+            terminal_interface.open().unwrap();
+            loop {
+                let call = terminal_interface.next_call().unwrap();
+                let action = match call {
+                    Call::ProcessKey { keycode, mask } => {
+                        key_processor.process_key(&rime_session, keycode, mask)
+                    }
+                    Call::Stop => {
+                        terminal_interface.close().unwrap();
+                        break;
+                    }
+                    _ => todo!(),
+                };
+                if args.json {
+                    writeln!(
+                        stdout(),
+                        "{}",
+                        serde_json::to_string(&Reply {
+                            id: None,
+                            result: Result::Action(action.clone())
+                        })
+                        .unwrap()
+                    )
+                    .unwrap();
                 }
-                _ => todo!(),
-            }
-        }
-    } else {
-        let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
-        let key_processor = key_processor::KeyProcessor::new();
-        match maybe_terminal_interface {
-            Ok(mut terminal_interface) => {
-                terminal_interface.open().unwrap();
-                loop {
-                    let call = terminal_interface.next_call().unwrap();
-                    let action = match call {
-                        Call::ProcessKey { keycode, mask } => {
-                            key_processor.process_key(&rime_session, keycode, mask)
-                        }
-                        Call::Stop => {
+                match action {
+                    Action::CommitString(commit_string) => {
+                        if !args.continue_mode {
                             terminal_interface.close().unwrap();
-                            break;
-                        }
-                        _ => todo!(),
-                    };
-                    match action {
-                        Action::CommitString(commit_string) => {
-                            if !args.continue_mode {
-                                terminal_interface.close().unwrap();
-                                writeln!(std::io::stdout(), "{}", commit_string).unwrap();
-                                break;
-                            } else {
-                                terminal_interface.remove_ui().unwrap();
-                                writeln!(std::io::stdout(), "{}", commit_string).unwrap();
-                                terminal_interface.setup_ui().unwrap();
+                            if !args.json {
+                                writeln!(stdout(), "{}", commit_string).unwrap();
                             }
-                        }
-                        Action::UpdateUi { menu, composition } => {
-                            terminal_interface.update_ui(composition, menu).unwrap()
+                            break;
+                        } else {
+                            terminal_interface.remove_ui().unwrap();
+                            if !args.json {
+                                writeln!(stdout(), "{}", commit_string).unwrap();
+                            }
+                            terminal_interface.setup_ui().unwrap();
                         }
                     }
+                    Action::UpdateUi { menu, composition } => {
+                        terminal_interface.update_ui(composition, menu).unwrap()
+                    }
                 }
-                ExitCode::SUCCESS
             }
-            Err(Error::NotATerminal) => todo!(),
-            Err(_) => ExitCode::FAILURE,
+            ExitCode::SUCCESS
         }
+        Err(Error::NotATerminal) => todo!(),
+        Err(_) => ExitCode::FAILURE,
     }
 }

@@ -30,7 +30,7 @@ pub enum Call {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Reply {
-    pub id: String,
+    pub id: Option<String>,
     pub result: Result,
 }
 
@@ -57,12 +57,12 @@ impl JsonRequestProcessor {
             Call::SchemaName => {
                 let status = rime_session.get_status();
                 Reply {
-                    id,
+                    id: Some(id),
                     result: Result::SchemaName(status.schema_name),
                 }
             }
             Call::ProcessKey { keycode, mask } => Reply {
-                id,
+                id: Some(id),
                 result: Result::Action(self.key_processor.process_key(rime_session, keycode, mask)),
             },
             _ => todo!(),

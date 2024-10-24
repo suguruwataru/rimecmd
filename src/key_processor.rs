@@ -2,7 +2,7 @@ use crate::rime_api::{RimeComposition, RimeMenu, RimeSession};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(
     rename_all = "snake_case",
     tag = "action",
