@@ -3,6 +3,8 @@ use super::Input;
 enum ParserStateImpl {
     Start,
     Esc,
+    Csi,
+    Csi1NumParam(usize),
     Completed(Input),
     Failed,
     Pending3ByteUtf8(Vec<u8>),
@@ -56,6 +58,25 @@ impl ParserStateImpl {
                 _ if byte.is_ascii_control() => unimplemented!(),
                 _ => ParserStateImpl::Completed(Input::Char(char::from(byte))),
             },
+            ParserStateImpl::Esc if byte == 0x5b => ParserStateImpl::Csi,
+            ParserStateImpl::Csi if byte.is_ascii_digit() => ParserStateImpl::Csi1NumParam(
+                char::from_u32(byte.into()).unwrap().to_digit(10).unwrap() as usize,
+            ),
+            ParserStateImpl::Csi1NumParam(param1) if byte.is_ascii_digit() => {
+                ParserStateImpl::Csi1NumParam(
+                    param1 * 10
+                        + char::from_u32(byte.into()).unwrap().to_digit(10).unwrap() as usize,
+                )
+            }
+            ParserStateImpl::Csi1NumParam(param1) if byte == 0x7e => match param1 {
+                1 => ParserStateImpl::Completed(Input::KeypadHome),
+                2 => ParserStateImpl::Completed(Input::Insert),
+                3 => ParserStateImpl::Completed(Input::Delete),
+                4 => ParserStateImpl::Completed(Input::KeypadEnd),
+                5 => ParserStateImpl::Completed(Input::PageUp),
+                6 => ParserStateImpl::Completed(Input::PageDown),
+                _ => ParserStateImpl::Failed,
+            },
             ParserStateImpl::Start if byte & 0b11100000 == 0b11100000 => {
                 ParserStateImpl::Pending3ByteUtf8(vec![byte])
             }
@@ -102,6 +123,58 @@ mod test {
     fn ascii_nul() {
         // The ascii code sent by Ctrl-`
         if let ParserStateImpl::Completed(Input::Nul) = ParserStateImpl::Start.consume_byte(0x00) {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn insert() {
+        if let ParserStateImpl::Completed(Input::Insert) = ParserStateImpl::Start
+            .consume_byte(0x1b)
+            .consume_byte(0x5b)
+            .consume_byte(0x32)
+            .consume_byte(0x7e)
+        {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn delete() {
+        if let ParserStateImpl::Completed(Input::Delete) = ParserStateImpl::Start
+            .consume_byte(0x1b)
+            .consume_byte(0x5b)
+            .consume_byte(0x33)
+            .consume_byte(0x7e)
+        {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn page_up() {
+        if let ParserStateImpl::Completed(Input::PageUp) = ParserStateImpl::Start
+            .consume_byte(0x1b)
+            .consume_byte(0x5b)
+            .consume_byte(0x35)
+            .consume_byte(0x7e)
+        {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn page_down() {
+        if let ParserStateImpl::Completed(Input::PageDown) = ParserStateImpl::Start
+            .consume_byte(0x1b)
+            .consume_byte(0x5b)
+            .consume_byte(0x36)
+            .consume_byte(0x7e)
+        {
         } else {
             panic!();
         }
