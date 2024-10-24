@@ -2,7 +2,7 @@ pub mod key_mappings;
 use crate::Error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::ffi::{c_char, c_int, c_void, CStr};
+use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::sync::{Arc, Mutex, Once};
 
 static RIME_API_SETUP: Once = Once::new();
@@ -79,6 +79,49 @@ extern "C" {
         rime_api: *mut CRimeApi,
         iterator: *mut CRimeCandidateListIterator,
     ) -> c_void;
+    fn RimeConfigOpen(config_id: *const c_char, config: *mut RimeConfig) -> c_int;
+    fn RimeConfigClose(config: *mut RimeConfig) -> c_int;
+    fn RimeConfigGetInt(config: *mut RimeConfig, key: *const c_char, value: *mut c_int) -> c_int;
+}
+
+#[repr(C)]
+pub struct RimeConfig {
+    ptr: *mut c_void,
+}
+
+pub trait RimeConfigValue
+where
+    Self: Sized,
+{
+    fn load(config: &mut RimeConfig, key: impl AsRef<str>) -> Option<Self>;
+}
+
+impl RimeConfigValue for isize {
+    fn load(config: &mut RimeConfig, key: impl AsRef<str>) -> Option<Self> {
+        let mut mem: c_int = 0;
+        let key = CString::new(key.as_ref()).unwrap();
+        if 0 == unsafe { RimeConfigGetInt(config as *mut RimeConfig, key.as_ptr(), &mut mem) } {
+            None
+        } else {
+            Some(mem as isize)
+        }
+    }
+}
+
+impl RimeConfig {
+    pub fn get<V: RimeConfigValue>(&mut self, key: impl AsRef<str>) -> Option<V> {
+        V::load(self, key)
+    }
+
+    pub fn close(mut self) {
+        // This Rime API function returns False only when the passed
+        // in point is nullptr or points to an uninitialed structure.
+        // It's impossible with the Rust setup written here.
+        // Therefore, the return value can be safely disgarded here.
+        unsafe {
+            RimeConfigClose(&mut self as *mut RimeConfig);
+        }
+    }
 }
 
 #[repr(C)]
@@ -567,6 +610,18 @@ impl RimeApi {
                 .unwrap(),
         )
     }
+
+    pub fn open_config(&self, config_id: impl AsRef<str>) -> Option<RimeConfig> {
+        let mut config = RimeConfig {
+            ptr: std::ptr::null_mut(),
+        };
+        let config_id = CString::new(config_id.as_ref()).unwrap();
+        if 0 == unsafe { RimeConfigOpen(config_id.as_ptr(), &mut config as *mut RimeConfig) } {
+            None
+        } else {
+            Some(config)
+        }
+    }
 }
 
 #[derive(Copy, Clone, clap::ValueEnum, Serialize)]
@@ -647,5 +702,17 @@ mod test {
             context.menu.candidates[1].comment.clone().unwrap(),
             "→ 西文"
         );
+    }
+
+    #[test]
+    #[ignore = "not thread safe"]
+    fn get_config_menu_page_size() {
+        let rime_api = crate::rime_api::RimeApi::new(
+            temporary_directory_path(),
+            "./test_shared_data",
+            LOG_LEVEL,
+        );
+        let mut rime_config = rime_api.open_config("default").unwrap();
+        assert_eq!(5, rime_config.get::<isize>("menu/page_size").unwrap());
     }
 }
