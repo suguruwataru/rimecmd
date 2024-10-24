@@ -229,16 +229,13 @@ fn rimecmd() -> Result<()> {
     );
     let rime_session = rime_api::RimeSession::new(&rime_api);
     if args.json {
-        let json_source = JsonSource::new(std::io::stdin());
-        let json_dest = std::io::stdout();
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
             TerminalJsonMode::new(config, terminal_interface).main()?;
             return Ok(());
         } else {
-            ServerMode {
-                json_source,
-                json_dest,
+            JsonMode {
+                config,
                 rime_session,
             }
             .main()?;
