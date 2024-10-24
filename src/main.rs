@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod testing_utilities;
+
 mod error;
 mod json_mode;
 mod json_request_processor;
@@ -16,6 +19,7 @@ use json_stdin::JsonStdin;
 use rime_api::{RimeComposition, RimeMenu};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use terminal_json_mode::TerminalJsonMode;
 use terminal_mode::TerminalMode;
 mod poll_request;
@@ -43,13 +47,12 @@ pub enum Effect {
     },
 }
 
-#[cfg(test)]
-mod testing_utilities;
-
 use clap::Parser;
 use schemars::schema_for;
-use std::io::{stdout, Write};
+use std::io::{stdout, Read, Write};
+use std::os::unix::net::UnixListener;
 use std::process::ExitCode;
+use std::thread;
 
 #[derive(Clone, clap::ValueEnum)]
 enum PrintJsonSchemaFor {
@@ -86,9 +89,13 @@ pub struct Args {
     #[arg(short, long, exclusive(true))]
     /// Print the JSON schema used, then exit.
     json_schema: Option<PrintJsonSchemaFor>,
+    #[arg(long, requires = "json", value_name = "PATH")]
+    unix_socket: Option<PathBuf>,
+    #[arg(long)]
+    server: bool,
 }
 
-fn main() -> ExitCode {
+fn rimecmd() -> Result<()> {
     let args = Args::parse();
     match args.json_schema {
         Some(PrintJsonSchemaFor::Request) => {
@@ -97,45 +104,58 @@ fn main() -> ExitCode {
                 "{}",
                 serde_json::to_string_pretty(&schema_for!(json_request_processor::Request))
                     .unwrap()
-            )
-            .unwrap();
-            return ExitCode::SUCCESS;
+            )?;
         }
         Some(PrintJsonSchemaFor::Reply) => {
             writeln!(
                 stdout(),
                 "{}",
                 serde_json::to_string_pretty(&schema_for!(json_request_processor::Reply)).unwrap()
-            )
-            .unwrap();
-            return ExitCode::SUCCESS;
+            )?;
         }
         None => (),
     }
-    let data_home = xdg::BaseDirectories::with_prefix("rimecmd")
-        .map_err(|err| Error::Xdg(err))
-        .map(|xdg_directories| xdg_directories.get_data_home())
-        .unwrap();
+    let xdg_directories = xdg::BaseDirectories::with_prefix("rimecmd")?;
+    let data_home = xdg_directories.get_data_home();
     let rime_api = rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
     let rime_session = rime_api::RimeSession::new(&rime_api);
+    let socket_path = if let Some(ref socket_path) = args.unix_socket {
+        PathBuf::from(socket_path)
+    } else {
+        if let Ok(runtime_directory) = xdg_directories.create_runtime_directory("socket") {
+            runtime_directory
+        } else {
+            std::env::temp_dir()
+        }
+        .join("rimecmd.sock")
+    };
+    if args.server {
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        for stream in listener.incoming() {
+            let mut stream = stream?;
+            thread::spawn(move || loop {
+                let mut buf = [0; 1024];
+                let count = match stream.read(&mut buf) {
+                    Ok(count) => count,
+                    Err(err) => return Error::from(err),
+                };
+                if count == 0 {
+                    return Error::InputClosed;
+                }
+                println!("{:?}", &buf[0..count]);
+            });
+        }
+        return Ok(());
+    }
     if args.json {
         let json_stdin = JsonStdin::new();
         if args.tty {
-            let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
-            return match maybe_terminal_interface {
-                Ok(terminal_interface) => {
-                    TerminalJsonMode::new(args, terminal_interface, json_stdin, rime_session)
-                        .main()
-                        .unwrap();
-                    ExitCode::SUCCESS
-                }
-                Err(_) => ExitCode::FAILURE,
-            };
+            let terminal_interface = terminal_interface::TerminalInterface::new()?;
+            TerminalJsonMode::new(args, terminal_interface, json_stdin, rime_session).main()?;
+            return Ok(());
         } else {
-            JsonMode::new(args, json_stdin, rime_session)
-                .main()
-                .unwrap();
-            return ExitCode::SUCCESS;
+            JsonMode::new(args, json_stdin, rime_session).main()?;
+            return Ok(());
         };
     }
     let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
@@ -146,16 +166,21 @@ fn main() -> ExitCode {
                 terminal_interface,
                 rime_session,
             }
-            .main()
-            .unwrap();
-            ExitCode::SUCCESS
+            .main()?;
         }
         Err(Error::NotATerminal) => {
-            JsonMode::new(args, JsonStdin::new(), rime_session)
-                .main()
-                .unwrap();
-            return ExitCode::SUCCESS;
+            JsonMode::new(args, JsonStdin::new(), rime_session).main()?;
         }
-        Err(_) => ExitCode::FAILURE,
+        err => {
+            err?;
+        }
+    }
+    Ok(())
+}
+
+fn main() -> ExitCode {
+    match rimecmd() {
+        Ok(_) => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
     }
 }

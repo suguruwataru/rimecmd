@@ -21,6 +21,12 @@ impl From<serde_json::Error> for crate::Error {
     }
 }
 
+impl From<xdg::BaseDirectoriesError> for crate::Error {
+    fn from(source: xdg::BaseDirectoriesError) -> Self {
+        Self::Xdg(source)
+    }
+}
+
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
