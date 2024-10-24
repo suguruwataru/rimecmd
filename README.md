@@ -1,31 +1,5 @@
 # To build
 
-This project includes C sources and Rust sources.
-The C sources must be built first.
-[Meson](https://mesonbuild.com/index.html) is used to build the C sources.
-
-When the project is built the first time, Meson needs the build directory
-`build/meson` to be setup.
-
-```
-meson setup build/meson
-```
-
-Note that, Meson itself does not require the build directory to be called
-`build/meson`. However, this project requires that. This directory name is
-hardcoded for the later Rust building step (see `build.rs`). Also, `build` is
-added to `.gitignore`.
-
-Then, once the build directory is set up, you can always use the following
-command to build the C part.
-
-```
-meson compile -C build/meson
-```
-
-After the C part is built, run the Rust build command, and it will
-automatically use what building C sources produces
-
 ```
 cargo build
 ```

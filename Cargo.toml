@@ -2,8 +2,7 @@
 name = "rimecmd"
 version = "0.1.0"
 edition = "2021"
-description = """
-Interact with the Rime input method through commands."""
+description = "Interact with the Rime input method through commands."
 
 [dependencies]
 clap = { version = "4.4.11", features = ["derive"] }
@@ -18,3 +17,6 @@ xdg = "2.5.2"
 
 [dev-dependencies]
 rand = "0.8.5"
+
+[build-dependencies]
+cc = "1.1.13"

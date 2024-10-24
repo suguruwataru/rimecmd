@@ -1,4 +1,4 @@
 /.cache
-/build
+/target
 /test_user_data_home
 /temporary_test_directories
