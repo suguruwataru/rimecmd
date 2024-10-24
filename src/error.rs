@@ -14,6 +14,12 @@ impl From<std::io::Error> for crate::Error {
     }
 }
 
+impl From<serde_json::Error> for crate::Error {
+    fn from(source: serde_json::Error) -> Self {
+        Self::Json(source)
+    }
+}
+
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

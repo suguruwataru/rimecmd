@@ -3,10 +3,6 @@ use crate::rime_api::RimeSession;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub struct JsonRequestProcessor {
-    key_processor: KeyProcessor,
-}
-
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Request {
@@ -41,21 +37,16 @@ pub enum Result {
     Action(crate::key_processor::Action),
 }
 
-impl JsonRequestProcessor {
-    pub fn new() -> Self {
-        Self {
-            key_processor: crate::key_processor::KeyProcessor::new(),
-        }
-    }
+pub struct JsonRequestProcessor<'a> {
+    pub key_processor: KeyProcessor,
+    pub rime_session: &'a RimeSession<'a>,
+}
 
-    pub fn process_request(
-        &self,
-        rime_session: &RimeSession,
-        Request { id, call: method }: Request,
-    ) -> Reply {
+impl JsonRequestProcessor<'_> {
+    pub fn process_request(&self, Request { id, call: method }: Request) -> Reply {
         match method {
             Call::SchemaName => {
-                let status = rime_session.get_status();
+                let status = self.rime_session.get_status();
                 Reply {
                     id: Some(id),
                     result: Result::SchemaName(status.schema_name),
@@ -63,7 +54,11 @@ impl JsonRequestProcessor {
             }
             Call::ProcessKey { keycode, mask } => Reply {
                 id: Some(id),
-                result: Result::Action(self.key_processor.process_key(rime_session, keycode, mask)),
+                result: Result::Action(self.key_processor.process_key(
+                    self.rime_session,
+                    keycode,
+                    mask,
+                )),
             },
             _ => todo!(),
         }
@@ -83,9 +78,11 @@ mod test {
             crate::testing_utilities::LOG_LEVEL,
         );
         let rime_session = crate::rime_api::RimeSession::new(&rime_api);
-        let json_request_processor = JsonRequestProcessor::new();
+        let json_request_processor = JsonRequestProcessor {
+            key_processor: KeyProcessor::new(),
+            rime_session: &rime_session,
+        };
         let schema_reply = json_request_processor.process_request(
-            &rime_session,
             serde_json::from_str(r#"{"id":"22","call":{"method":"schema_name"}}"#).unwrap(),
         );
         assert_eq!(
@@ -103,9 +100,11 @@ mod test {
             crate::testing_utilities::LOG_LEVEL,
         );
         let rime_session = crate::rime_api::RimeSession::new(&rime_api);
-        let json_request_processor = JsonRequestProcessor::new();
+        let json_request_processor = JsonRequestProcessor {
+            key_processor: KeyProcessor::new(),
+            rime_session: &rime_session,
+        };
         let schema_reply = json_request_processor.process_request(
-            &rime_session,
             serde_json::from_str(
                 // Ctrl-`
                 r#"{
