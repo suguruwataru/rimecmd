@@ -1,0 +1,8 @@
+#!/bin/sh
+set -x
+set -e
+find src -name '*.c' | xargs clang-check -p meson_build
+find src -name '*.c' | xargs clang-format --dry-run
+cargo fmt --check
+cargo check
+cargo test
