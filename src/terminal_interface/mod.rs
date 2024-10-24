@@ -3,7 +3,8 @@ use crate::rime_api::key_mappings::{
     rime_character_to_key_name_map, rime_key_name_to_key_code_map,
 };
 use std::collections::HashMap;
-use std::io::Write;
+use std::io::{Read, Write};
+use std::iter::Iterator;
 use std::os::fd::AsRawFd;
 
 mod input_parser;
@@ -35,6 +36,34 @@ impl<'a> Write for TerminalInterface<'a> {
 }
 
 impl<'a> TerminalInterface<'a> {
+    pub fn next_response(&mut self) -> Option<(Response, Vec<u8>)> {
+        let std::ops::ControlFlow::Break((input, byte_vec)) =
+            std::io::Read::by_ref(&mut self.tty_file).bytes().try_fold(
+                (input_parser::ParserState::new(), vec![]),
+                |(parser_state, mut byte_vec), maybe_byte| {
+                    let byte = maybe_byte.unwrap();
+                    byte_vec.push(byte);
+                    match parser_state.consume_byte(byte) {
+                        input_parser::ConsumeByteResult::Pending(state) => {
+                            std::ops::ControlFlow::Continue((state, byte_vec))
+                        }
+                        input_parser::ConsumeByteResult::Completed(input) => {
+                            std::ops::ControlFlow::Break((input, byte_vec))
+                        }
+                    }
+                },
+            )
+        else {
+            unreachable!()
+        };
+        match input {
+            input_parser::Input::Char(character) => {
+                Some((self.handle_character(character), byte_vec))
+            }
+            _ => unimplemented!(),
+        }
+    }
+
     pub fn new(request_handler: RequestHandler<'a>) -> Result<Self> {
         Ok(Self {
             tty_file: std::fs::OpenOptions::new()

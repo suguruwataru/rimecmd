@@ -1,5 +1,7 @@
+#[allow(dead_code)]
 pub enum Input {
     Char(char),
+    EscapeCode,
 }
 
 enum ParserStateImpl {
@@ -10,16 +12,27 @@ enum ParserStateImpl {
     Pending3ByteUtf8(Vec<u8>),
 }
 
+pub enum ConsumeByteResult {
+    Pending(ParserState),
+    Completed(Input),
+}
+
 pub struct ParserState(ParserStateImpl);
 
-#[allow(dead_code)]
 impl ParserState {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self(ParserStateImpl::Start)
+    }
+
+    pub fn consume_byte(self, byte: u8) -> ConsumeByteResult {
+        match self.0.consume_byte(byte) {
+            ParserStateImpl::Completed(input) => ConsumeByteResult::Completed(input),
+            ParserStateImpl::Failed => unimplemented!(),
+            pending => ConsumeByteResult::Pending(Self(pending)),
+        }
     }
 }
 
-#[allow(dead_code)]
 impl ParserStateImpl {
     /// Arguments:
     /// * bytes - The bytes thats has been received for this UTF-8 character.

@@ -10,10 +10,10 @@ mod terminal_interface;
 #[cfg(test)]
 mod testing_utilities;
 
-use std::io::{Read, Write};
+use std::io::Write;
 
 struct View {
-    input_characters: Vec<char>,
+    input_bytes: Vec<u8>,
     height: usize,
 }
 
@@ -32,51 +32,46 @@ fn main() {
     )
     .unwrap();
     terminal_interface.open().unwrap();
-    std::io::stdin().bytes().take(2).fold(
-        View {
-            input_characters: vec![],
-            height: 0,
-        },
-        |view, maybe_byte| {
-            let character = maybe_byte.unwrap() as char;
-            let response = terminal_interface.handle_character(character);
-            terminal_interface.erase_line().unwrap();
-            terminal_interface.carriage_return().unwrap();
-            terminal_interface.cursor_up(view.height).unwrap();
-            let view = match response {
-                request_handler::Response::ProcessKey {
-                    commit_text: _,
-                    preview_text: _,
-                    menu,
-                } => {
-                    menu.candidates
-                        .iter()
-                        .take(menu.page_size)
-                        .enumerate()
-                        .for_each(|(index, candidate)| {
-                            write!(terminal_interface, "{}. {}\r\n", index + 1, candidate.text,)
-                                .unwrap();
-                        });
-                    View {
-                        input_characters: view
-                            .input_characters
-                            .into_iter()
-                            .chain(std::iter::once(character))
-                            .collect(),
-                        height: menu.page_size,
-                    }
+    let mut view = View {
+        input_bytes: vec![],
+        height: 0,
+    };
+    for _ in 0..2 {
+        let Some((response, byte_vec)) = terminal_interface.next_response() else {
+            unimplemented!();
+        };
+        terminal_interface.erase_line().unwrap();
+        terminal_interface.carriage_return().unwrap();
+        terminal_interface.cursor_up(view.height).unwrap();
+        match response {
+            request_handler::Response::ProcessKey {
+                commit_text: _,
+                preview_text: _,
+                menu,
+            } => {
+                menu.candidates
+                    .iter()
+                    .take(menu.page_size)
+                    .enumerate()
+                    .for_each(|(index, candidate)| {
+                        write!(terminal_interface, "{}. {}\r\n", index + 1, candidate.text,)
+                            .unwrap();
+                    });
+                view = View {
+                    input_bytes: view
+                        .input_bytes
+                        .into_iter()
+                        .chain(byte_vec.into_iter())
+                        .collect(),
+                    height: menu.page_size,
                 }
-                _ => unimplemented!(),
-            };
-            write!(
-                terminal_interface,
-                "> {}",
-                view.input_characters.iter().collect::<String>()
-            )
+            }
+            _ => unimplemented!(),
+        };
+        terminal_interface
+            .write(&[b"> ", view.input_bytes.as_slice()].concat())
             .unwrap();
-            view
-        },
-    );
+    }
     terminal_interface.carriage_return().unwrap();
     write!(terminal_interface, "\n").unwrap();
     terminal_interface.flush().unwrap();
