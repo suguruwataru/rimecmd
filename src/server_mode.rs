@@ -4,6 +4,7 @@ use crate::rime_api::{RimeApi, RimeSession};
 use crate::Config;
 use crate::Effect;
 use crate::{Error, Result};
+use std::fs::remove_file;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
@@ -65,6 +66,7 @@ impl ServerMode {
             }
         });
         stop_receiver.recv().unwrap();
+        remove_file(&self.config.unix_socket)?;
         Ok(())
     }
 }
@@ -140,7 +142,7 @@ impl Session {
                     stop_sender.lock().unwrap().send(()).unwrap();
                     break;
                 }
-                _ => (),
+                _ => {}
             }
         }
         match Self::read_request(&mut client_stream) {

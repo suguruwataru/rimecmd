@@ -245,7 +245,7 @@ fn main() -> ExitCode {
             eprintln!("This usually means that a server is already running.");
             eprintln!(
                 "If you are sure that there does not exist \
-                an already running server instance, use `--force-restart-server`."
+                an already running server instance, use `--force-start-server`."
             );
             eprintln!(
                 "This will remove the already existing unix socket and then start the server."
