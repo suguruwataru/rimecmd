@@ -1,3 +1,17 @@
+/// This module includes that code that includes with a text terminal
+///
+/// This module interacts with a terminal using console_codes(4). In
+/// addition, it supports function keys via XTerm codes, as documented on
+/// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html.
+///
+/// Though console_codes(4) says that one should not directly parse/write
+/// console codes, this is exactly what this module does. The alternative
+/// method suggested by the man page, using `terminfo`, is not really
+/// practically today. Rust lacks support for `terminfo`. `terminfo`
+/// itself is huge and highly complicated, hard to learn and easy to get
+/// wrong with. Also, with today's terminals, which generally support a
+/// similar set of codes, and the limited terminal functions this program
+/// uses, `terminfo` hardly makes a difference.
 use crate::key_processor::{Action, KeyProcessor};
 use std::io::{Read, Write};
 use std::iter::Iterator;
