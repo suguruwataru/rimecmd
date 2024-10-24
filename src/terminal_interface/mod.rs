@@ -66,7 +66,7 @@ impl<'a> TerminalInterface<'a> {
         Ok(result_input?)
     }
 
-    pub fn process_input(&mut self) -> Result<String> {
+    pub fn process_input(&mut self) -> Result<Option<String>> {
         let mut height = 0;
         self.enter_raw_mode()?;
         self.erase_line_all()?;
@@ -81,7 +81,7 @@ impl<'a> TerminalInterface<'a> {
                     self.carriage_return()?;
                     self.erase_after()?;
                     self.exit_raw_mode()?;
-                    break Ok("".into());
+                    break Ok(None);
                 }
                 input => {
                     let Some(input_translator::RimeKey { keycode, mask }) =
@@ -110,7 +110,7 @@ impl<'a> TerminalInterface<'a> {
                             self.carriage_return()?;
                             self.erase_after()?;
                             self.exit_raw_mode()?;
-                            break Ok(commit_string);
+                            break Ok(Some(commit_string));
                         }
                     }
                 }

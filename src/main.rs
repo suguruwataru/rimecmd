@@ -24,5 +24,7 @@ fn main() {
         key_processor::KeyProcessor::new(rime_api::RimeSession::new(&rime_api)),
     )
     .unwrap();
-    writeln!(stdout(), "{}", terminal_interface.process_input().unwrap()).unwrap();
+    if let Some(commit_string) = terminal_interface.process_input().unwrap() {
+        writeln!(stdout(), "{}", commit_string).unwrap();
+    }
 }
