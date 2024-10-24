@@ -4,6 +4,8 @@ use crate::rime_api::{RimeApi, RimeSession};
 use crate::Config;
 use crate::Effect;
 use crate::{Error, Result};
+use signal_hook::consts::signal::{SIGINT, SIGTERM};
+use signal_hook::iterator::Signals;
 use std::fs::remove_file;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixListener;
@@ -29,13 +31,37 @@ impl ServerMode {
 
     pub fn main(self) -> Result<()> {
         let (error_sender, error_receiver) = channel();
-        let (stop_sender, stop_receiver) = channel();
-        let error_sender = Arc::new(Mutex::new(error_sender));
-        let stop_sender = Arc::new(Mutex::new(stop_sender));
         thread::spawn(move || loop {
             let _error: Error = error_receiver.recv().unwrap();
             eprintln!("{:?}", _error);
             todo!("implement error logging");
+        });
+        let (stop_sender, stop_receiver) = channel();
+        let stop_sender = Arc::new(Mutex::new(stop_sender));
+        let error_sender = Arc::new(Mutex::new(error_sender));
+        let sigterm_stop_sender = Arc::clone(&stop_sender);
+        let sigterm_error_sender = Arc::clone(&error_sender);
+        thread::spawn(move || {
+            let mut signals = match Signals::new(&[SIGTERM, SIGINT]) {
+                Ok(signals) => signals,
+                Err(err) => {
+                    sigterm_error_sender
+                        .lock()
+                        .unwrap()
+                        .send(err.into())
+                        .unwrap();
+                    return;
+                }
+            };
+            for signal in signals.forever() {
+                match signal {
+                    SIGTERM | SIGINT => {
+                        sigterm_stop_sender.lock().unwrap().send(()).unwrap();
+                        return;
+                    }
+                    _ => unreachable!(),
+                }
+            }
         });
         let rime_api = Arc::new(Mutex::new(RimeApi::new(
             &self.config.user_data_directory,
