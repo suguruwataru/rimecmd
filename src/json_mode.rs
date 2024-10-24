@@ -5,20 +5,27 @@ use crate::poll_request::RequestSource;
 use crate::rime_api::RimeSession;
 use crate::Result;
 use crate::{Args, Call, Effect};
-use std::io::{stdout, Read, Write};
+use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 
-pub struct JsonMode<'a, R: Read + AsRawFd> {
+pub struct JsonMode<'a, I: Read + AsRawFd, O: Write> {
     pub args: Args,
-    pub json_stdin: JsonSource<R>,
+    pub json_source: JsonSource<I>,
+    pub json_dest: O,
     pub rime_session: RimeSession<'a>,
 }
 
-impl<'a, R: Read + AsRawFd> JsonMode<'a, R> {
-    pub fn new(args: Args, json_stdin: JsonSource<R>, rime_session: RimeSession<'a>) -> Self {
+impl<'a, I: Read + AsRawFd, O: Write> JsonMode<'a, I, O> {
+    pub fn new(
+        args: Args,
+        json_source: JsonSource<I>,
+        json_dest: O,
+        rime_session: RimeSession<'a>,
+    ) -> Self {
         Self {
             args,
-            json_stdin,
+            json_source,
+            json_dest,
             rime_session,
         }
     }
@@ -29,7 +36,7 @@ impl<'a, R: Read + AsRawFd> JsonMode<'a, R> {
             key_processor: KeyProcessor::new(),
         };
         loop {
-            let request = self.json_stdin.next_request();
+            let request = self.json_source.next_request();
             let reply = match request {
                 Ok(Request {
                     id: _,
@@ -54,14 +61,14 @@ impl<'a, R: Read + AsRawFd> JsonMode<'a, R> {
                     ..
                 } => {
                     if !self.args.continue_mode {
-                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                        writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
                         break;
                     } else {
-                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                        writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
                     }
                 }
                 reply => {
-                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                    writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
                 }
             }
         }

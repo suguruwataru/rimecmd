@@ -4,17 +4,17 @@ use crate::{Error, Result};
 use std::io::Read;
 use std::os::fd::AsRawFd;
 
-pub struct JsonSource<R: Read + AsRawFd> {
-    source: R,
+pub struct JsonSource<I: Read + AsRawFd> {
+    source: I,
 }
 
-impl<R: Read + AsRawFd> JsonSource<R> {
-    pub fn new(source: R) -> Self {
+impl<I: Read + AsRawFd> JsonSource<I> {
+    pub fn new(source: I) -> Self {
         Self { source }
     }
 }
 
-impl<R: Read + AsRawFd> RequestSource for JsonSource<R> {
+impl<I: Read + AsRawFd> RequestSource for JsonSource<I> {
     fn register(&self, poll_request: &mut PollRequest) -> Result<()> {
         poll_request.register(&self.source.as_raw_fd())
     }

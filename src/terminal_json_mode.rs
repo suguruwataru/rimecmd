@@ -7,28 +7,31 @@ use crate::terminal_interface::TerminalInterface;
 use crate::Result;
 use crate::{Args, Call, Effect};
 use std::cell::RefCell;
-use std::io::{stdout, Read, Write};
+use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 use std::rc::Rc;
 
-pub struct TerminalJsonMode<'a, R: Read + AsRawFd> {
+pub struct TerminalJsonMode<'a, I: Read + AsRawFd, O: Write> {
     args: Args,
     terminal_interface: Rc<RefCell<TerminalInterface>>,
-    json_source: Rc<RefCell<JsonSource<R>>>,
+    json_source: Rc<RefCell<JsonSource<I>>>,
+    json_dest: O,
     rime_session: RimeSession<'a>,
 }
 
-impl<'a, R: Read + AsRawFd + 'static> TerminalJsonMode<'a, R> {
+impl<'a, I: Read + AsRawFd + 'static, O: Write> TerminalJsonMode<'a, I, O> {
     pub fn new(
         args: Args,
         terminal_interface: TerminalInterface,
-        json_source: JsonSource<R>,
+        json_source: JsonSource<I>,
+        json_dest: O,
         rime_session: RimeSession<'a>,
     ) -> Self {
         Self {
             args,
             terminal_interface: Rc::new(RefCell::new(terminal_interface)),
             json_source: Rc::new(RefCell::new(json_source)),
+            json_dest,
             rime_session,
         }
     }
@@ -72,11 +75,11 @@ impl<'a, R: Read + AsRawFd + 'static> TerminalJsonMode<'a, R> {
                 } => {
                     if !self.args.continue_mode {
                         self.terminal_interface.borrow_mut().close()?;
-                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                        writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
                         break;
                     } else {
                         self.terminal_interface.borrow_mut().remove_ui()?;
-                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                        writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
                         self.terminal_interface.borrow_mut().setup_ui()?;
                     }
                 }
@@ -88,13 +91,13 @@ impl<'a, R: Read + AsRawFd + 'static> TerminalJsonMode<'a, R> {
                         }),
                     ..
                 } => {
-                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                    writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
                     self.terminal_interface
                         .borrow_mut()
                         .update_ui(composition, menu)?;
                 }
                 reply => {
-                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                    writeln!(self.json_dest, "{}", &serde_json::to_string(&reply)?)?;
                 }
             }
         }

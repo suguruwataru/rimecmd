@@ -137,9 +137,14 @@ fn rimecmd() -> Result<()> {
                 let rime_api =
                     rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
                 let rime_session = rime_api::RimeSession::new(&rime_api);
-                JsonMode::new(args, JsonSource::new(stream), rime_session)
-                    .main()
-                    .unwrap();
+                JsonMode::new(
+                    args,
+                    JsonSource::new(stream.try_clone().unwrap()),
+                    stream,
+                    rime_session,
+                )
+                .main()
+                .unwrap();
             });
         }
         return Ok(());
@@ -148,12 +153,20 @@ fn rimecmd() -> Result<()> {
     let rime_session = rime_api::RimeSession::new(&rime_api);
     if args.json {
         let json_stdin = JsonSource::new(std::io::stdin());
+        let json_dest = std::io::stdout();
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
-            TerminalJsonMode::new(args, terminal_interface, json_stdin, rime_session).main()?;
+            TerminalJsonMode::new(
+                args,
+                terminal_interface,
+                json_stdin,
+                json_dest,
+                rime_session,
+            )
+            .main()?;
             return Ok(());
         } else {
-            JsonMode::new(args, json_stdin, rime_session).main()?;
+            JsonMode::new(args, json_stdin, json_dest, rime_session).main()?;
             return Ok(());
         };
     }
@@ -168,7 +181,13 @@ fn rimecmd() -> Result<()> {
             .main()?;
         }
         Err(Error::NotATerminal) => {
-            JsonMode::new(args, JsonSource::new(std::io::stdin()), rime_session).main()?;
+            JsonMode::new(
+                args,
+                JsonSource::new(std::io::stdin()),
+                std::io::stdout(),
+                rime_session,
+            )
+            .main()?;
         }
         err => {
             err?;
