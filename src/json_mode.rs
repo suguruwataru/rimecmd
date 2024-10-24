@@ -1,20 +1,21 @@
 use crate::json_request_processor::{JsonRequestProcessor, Outcome as ReplyResult, Reply, Request};
-use crate::json_stdin::JsonStdin;
+use crate::json_source::JsonSource;
 use crate::key_processor::KeyProcessor;
 use crate::poll_request::RequestSource;
 use crate::rime_api::RimeSession;
 use crate::Result;
 use crate::{Args, Call, Effect};
-use std::io::{stdout, Write};
+use std::io::{stdout, Read, Write};
+use std::os::fd::AsRawFd;
 
-pub struct JsonMode<'a> {
+pub struct JsonMode<'a, R: Read + AsRawFd> {
     pub args: Args,
-    pub json_stdin: JsonStdin,
+    pub json_stdin: JsonSource<R>,
     pub rime_session: RimeSession<'a>,
 }
 
-impl<'a> JsonMode<'a> {
-    pub fn new(args: Args, json_stdin: JsonStdin, rime_session: RimeSession<'a>) -> Self {
+impl<'a, R: Read + AsRawFd> JsonMode<'a, R> {
+    pub fn new(args: Args, json_stdin: JsonSource<R>, rime_session: RimeSession<'a>) -> Self {
         Self {
             args,
             json_stdin,

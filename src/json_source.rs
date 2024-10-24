@@ -3,28 +3,27 @@ use crate::poll_request::{PollRequest, RequestSource};
 use crate::{Error, Result};
 use std::io::Read;
 use std::os::fd::AsRawFd;
-pub struct JsonStdin {
-    stdin: std::io::Stdin,
+
+pub struct JsonSource<R: Read + AsRawFd> {
+    source: R,
 }
 
-impl JsonStdin {
-    pub fn new() -> Self {
-        Self {
-            stdin: std::io::stdin(),
-        }
+impl<R: Read + AsRawFd> JsonSource<R> {
+    pub fn new(source: R) -> Self {
+        Self { source }
     }
 }
 
-impl RequestSource for JsonStdin {
+impl<R: Read + AsRawFd> RequestSource for JsonSource<R> {
     fn register(&self, poll_request: &mut PollRequest) -> Result<()> {
-        poll_request.register(&self.stdin.as_raw_fd())
+        poll_request.register(&self.source.as_raw_fd())
     }
 
     fn next_request(&mut self) -> Result<Request> {
         let mut buf = [0u8; 1024];
         let mut json_bytes = vec![];
         loop {
-            let count = self.stdin.read(&mut buf)?;
+            let count = self.source.read(&mut buf)?;
             if count == 0 {
                 break Err(Error::InputClosed);
             }
