@@ -1,9 +1,4 @@
-#[allow(dead_code)]
-pub enum Input {
-    Char(char),
-    Nul,
-    Etx,
-}
+use super::Input;
 
 enum ParserStateImpl {
     Start,

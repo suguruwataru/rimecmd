@@ -1,20 +1,26 @@
 use crate::key_processor::{KeyProcessor, Report};
-use crate::rime_api::key_mappings::{
-    rime_character_to_key_name_map, rime_key_name_to_key_code_map,
-};
-use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::iter::Iterator;
 use std::os::fd::AsRawFd;
 
 mod input_parser;
 
+mod input_translator;
+#[cfg(test)]
+mod test_input_translator;
+
+#[allow(dead_code)]
+pub enum Input {
+    Char(char),
+    Nul,
+    Etx,
+}
+
 pub struct TerminalInterface<'a> {
     tty_file: std::fs::File,
     original_mode: Option<libc::termios>,
     key_processor: KeyProcessor<'a>,
-    rime_character_to_key_name_map: HashMap<char, &'static str>,
-    rime_key_name_to_key_code_map: HashMap<&'static str, usize>,
+    input_translator: input_translator::InputTranslator,
 }
 
 pub enum Action {
@@ -41,6 +47,22 @@ impl<'a> Write for TerminalInterface<'a> {
 }
 
 impl<'a> TerminalInterface<'a> {
+    pub fn new(key_processor: KeyProcessor<'a>) -> Result<Self> {
+        Ok(Self {
+            tty_file: std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open("/dev/tty")
+                .map_err(|io_err| match io_err.kind() {
+                    std::io::ErrorKind::NotFound => crate::Error::NotATerminal,
+                    _ => crate::Error::External(io_err),
+                })?,
+            original_mode: None,
+            key_processor,
+            input_translator: input_translator::InputTranslator::new(),
+        })
+    }
+
     pub fn next_response(&mut self) -> Option<(Action, Vec<u8>)> {
         let std::ops::ControlFlow::Break((input, byte_vec)) =
             std::io::Read::by_ref(&mut self.tty_file).bytes().try_fold(
@@ -62,29 +84,19 @@ impl<'a> TerminalInterface<'a> {
             unreachable!()
         };
         match input {
-            input_parser::Input::Char(character) => {
-                Some((Action::Update(self.handle_character(character)), byte_vec))
+            Input::Etx => Some((Action::Exit, byte_vec)),
+            input => {
+                let Some(input_translator::RimeKey { keycode, mask }) =
+                    self.input_translator.translate_input(input)
+                else {
+                    unimplemented!()
+                };
+                Some((
+                    Action::Update(self.key_processor.process_key(keycode, mask)),
+                    byte_vec,
+                ))
             }
-            input_parser::Input::Etx => Some((Action::Exit, byte_vec)),
-            _ => unimplemented!(),
         }
-    }
-
-    pub fn new(key_processor: KeyProcessor<'a>) -> Result<Self> {
-        Ok(Self {
-            tty_file: std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open("/dev/tty")
-                .map_err(|io_err| match io_err.kind() {
-                    std::io::ErrorKind::NotFound => crate::Error::NotATerminal,
-                    _ => crate::Error::External(io_err),
-                })?,
-            original_mode: None,
-            key_processor,
-            rime_key_name_to_key_code_map: rime_key_name_to_key_code_map(),
-            rime_character_to_key_name_map: rime_character_to_key_name_map(),
-        })
     }
 
     pub fn enter_raw_mode(&mut self) -> Result<()> {
@@ -148,18 +160,5 @@ impl<'a> TerminalInterface<'a> {
             return Err(crate::Error::External(std::io::Error::last_os_error()));
         }
         Ok(())
-    }
-
-    pub fn handle_character(&self, character: char) -> Report {
-        match self.rime_character_to_key_name_map.get(&character) {
-            Some(key_name) => self.key_processor.process_key(
-                self.rime_key_name_to_key_code_map
-                    .get(key_name)
-                    .copied()
-                    .unwrap(),
-                0,
-            ),
-            None => unimplemented!(),
-        }
     }
 }
