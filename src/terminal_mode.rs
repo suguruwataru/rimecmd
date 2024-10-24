@@ -4,6 +4,7 @@ use crate::poll_data::ReadData;
 use crate::terminal_interface::TerminalInterface;
 use crate::{Call, Config, Effect, Error};
 use std::io::{stdout, Write};
+use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use uuid::Uuid;
 
@@ -34,7 +35,8 @@ impl TerminalMode {
         self.terminal_interface.open()?;
         let stream = UnixStream::connect(&self.config.unix_socket)?;
         let mut json_dest = stream.try_clone()?;
-        let mut json_source = JsonSource::new(stream);
+        let json_source = stream.try_clone()?;
+        let mut json_source = JsonSource::new(json_source);
         loop {
             let call = self.terminal_interface.next_call()?;
             let reply = match call {
@@ -80,6 +82,7 @@ impl TerminalMode {
                     outcome: Outcome::Effect(Effect::StopClient),
                     ..
                 } => {
+                    stream.shutdown(Shutdown::Both)?;
                     self.terminal_interface.close()?;
                     break;
                 }

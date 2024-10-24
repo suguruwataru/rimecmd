@@ -76,6 +76,7 @@ impl TerminalJsonMode {
             Rc::clone(&stdin) as Rc<RefCell<dyn ReadData<Data>>>,
             Rc::clone(&server_reader) as Rc<RefCell<dyn ReadData<Data>>>,
         ])?;
+        let mut json_bytes = vec![];
         loop {
             let data = poll_data.poll()?;
             let reply = match data {
@@ -92,7 +93,15 @@ impl TerminalJsonMode {
                 Data::ServerBytes(bytes) => {
                     stdout().write(&bytes)?;
                     stdout().flush()?;
-                    serde_json::from_slice(&bytes)?
+                    json_bytes.extend_from_slice(&bytes);
+                    match serde_json::from_slice(&bytes) {
+                        Ok(reply) => {
+                            json_bytes.clear();
+                            reply
+                        }
+                        Err(err) if err.is_eof() => continue,
+                        result => result?,
+                    }
                 }
             };
             match reply {
@@ -104,7 +113,8 @@ impl TerminalJsonMode {
                         self.terminal_interface.borrow_mut().close()?;
                         stdout().write(&serde_json::to_string(&reply)?.as_bytes())?;
                         stdout().flush()?;
-                        server_reader.borrow_mut().stream.shutdown(Shutdown::Both)?;
+                        server_reader.borrow_mut().stream.shutdown(Shutdown::Read)?;
+                        server_writer.shutdown(Shutdown::Write)?;
                         break;
                     } else {
                         self.terminal_interface.borrow_mut().remove_ui()?;
@@ -134,6 +144,7 @@ impl TerminalJsonMode {
                     stdout().write(&serde_json::to_string(&reply)?.as_bytes())?;
                     stdout().flush()?;
                     server_reader.borrow_mut().stream.shutdown(Shutdown::Both)?;
+                    server_writer.shutdown(Shutdown::Write)?;
                     self.terminal_interface.borrow_mut().close()?;
                     break;
                 }

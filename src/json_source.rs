@@ -5,25 +5,25 @@ use std::io::Read;
 use std::os::fd::AsRawFd;
 
 pub struct JsonSource<I: Read + AsRawFd> {
-    src: I,
+    source: I,
 }
 
 impl<I: Read + AsRawFd> JsonSource<I> {
     pub fn new(source: I) -> Self {
-        Self { src: source }
+        Self { source }
     }
 }
 
 impl<I: Read + AsRawFd, D: DeserializeOwned> ReadData<D> for JsonSource<I> {
     fn register(&self, poll_request: &mut PollData<D>) -> Result<()> {
-        poll_request.register(&self.src.as_raw_fd())
+        poll_request.register(&self.source.as_raw_fd())
     }
 
     fn read_data(&mut self) -> Result<D> {
         let mut buf = [0u8; 1024];
         let mut json_bytes = vec![];
         loop {
-            let count = self.src.read(&mut buf)?;
+            let count = self.source.read(&mut buf)?;
             if count == 0 {
                 break Err(Error::InputClosed);
             }

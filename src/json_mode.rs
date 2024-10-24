@@ -80,7 +80,8 @@ impl JsonMode {
                             outcome: Outcome::Effect(Effect::StopClient | Effect::StopServer),
                             ..
                         } => {
-                            server_reader.borrow_mut().stream.shutdown(Shutdown::Both)?;
+                            server_reader.borrow_mut().stream.shutdown(Shutdown::Read)?;
+                            server_writer.shutdown(Shutdown::Write)?;
                             break;
                         }
                         _ => (),
