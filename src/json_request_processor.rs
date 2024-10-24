@@ -43,6 +43,10 @@ impl TryFrom<crate::Error> for Outcome {
                 code: 22,
                 message: "received unsupported input".into(),
             }),
+            NotOnlyClient => Ok(Outcome::Error {
+                code: 23,
+                message: format!("{:?}", NotOnlyClient),
+            }),
             Json(json_error) => Ok(Outcome::Error {
                 code: 24,
                 message: format!("{}", json_error),

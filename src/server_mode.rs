@@ -69,7 +69,9 @@ impl ServerMode {
             self.config.rime_log_level,
         )));
         thread::spawn(move || {
+            let client_count = Arc::new(Mutex::new(0));
             for stream in self.unix_listener.incoming() {
+                *client_count.lock().unwrap() += 1;
                 let stream = match stream {
                     Ok(stream) => stream,
                     Err(err) => {
@@ -79,15 +81,18 @@ impl ServerMode {
                 };
                 let error_sender = Arc::clone(&error_sender);
                 let stop_sender = Arc::clone(&stop_sender);
+                let client_count = Arc::clone(&client_count);
                 let rime_api = Arc::clone(&rime_api);
                 thread::spawn(move || {
                     Session {
                         client_stream: stream,
+                        client_count: Arc::clone(&client_count),
                         rime_session: RimeSession::new(rime_api),
                         stop_sender,
                     }
                     .run()
                     .unwrap_or_else(|err| error_sender.lock().unwrap().send(err).unwrap());
+                    *client_count.lock().unwrap() -= 1;
                 });
             }
         });
@@ -99,6 +104,7 @@ impl ServerMode {
 
 struct Session {
     client_stream: UnixStream,
+    client_count: Arc<Mutex<usize>>,
     rime_session: RimeSession,
     stop_sender: Arc<Mutex<Sender<()>>>,
 }
@@ -127,6 +133,7 @@ impl Session {
 
     pub fn run(self) -> Result<()> {
         let Self {
+            client_count,
             rime_session,
             stop_sender,
             mut client_stream,
@@ -152,26 +159,50 @@ impl Session {
                     }
                 },
             };
-            client_stream.write(serde_json::to_string(&reply)?.as_bytes())?;
-            client_stream.flush()?;
             match reply {
                 Reply {
                     outcome: Outcome::Effect(Effect::StopClient),
                     ..
                 } => {
-                    break;
+                    client_stream.write(serde_json::to_string(&reply)?.as_bytes())?;
+                    client_stream.flush()?;
+                    return Self::check_client_stream_closed(&mut client_stream);
                 }
                 Reply {
                     outcome: Outcome::Effect(Effect::StopServer),
-                    ..
+                    ref id,
                 } => {
-                    stop_sender.lock().unwrap().send(()).unwrap();
-                    break;
+                    let locked_client_count = client_count.lock().unwrap();
+                    if *locked_client_count == 1 {
+                        // One string reference is the stop sender here, the other is the one in the
+                        // thread that starts threads on `incoming` streams. In such a case, this
+                        // is the only thread that is serving a client.
+                        client_stream.write(serde_json::to_string(&reply)?.as_bytes())?;
+                        client_stream.flush()?;
+                        let result = Self::check_client_stream_closed(&mut client_stream);
+                        stop_sender.lock().unwrap().send(()).unwrap();
+                        return result;
+                    } else {
+                        client_stream.write(
+                            serde_json::to_string(&Reply {
+                                id: id.clone(),
+                                outcome: Error::NotOnlyClient.try_into().unwrap(),
+                            })?
+                            .as_bytes(),
+                        )?;
+                        client_stream.flush()?;
+                    }
                 }
-                _ => {}
+                _ => {
+                    client_stream.write(serde_json::to_string(&reply)?.as_bytes())?;
+                    client_stream.flush()?;
+                }
             }
         }
-        match Self::read_request(&mut client_stream) {
+    }
+
+    fn check_client_stream_closed(client_stream: &mut UnixStream) -> Result<()> {
+        match Self::read_request(client_stream) {
             Err(Error::InputClosed) => Ok(()),
             Ok(_) => Err(Error::ClientShouldCloseConnection),
             Err(err) => Err(err.into()),
