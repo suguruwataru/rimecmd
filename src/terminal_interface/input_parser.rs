@@ -8,7 +8,9 @@ enum ParserStateImpl {
     Completed(Input),
     // Failed could mean unsupported sequence or invalid sequence
     Failed,
+    Pending2ByteUtf8(Vec<u8>),
     Pending3ByteUtf8(Vec<u8>),
+    Pending4ByteUtf8(Vec<u8>),
 }
 
 pub enum ConsumeByteResult {
@@ -38,16 +40,11 @@ impl ParserStateImpl {
     /// Arguments:
     /// * bytes - The bytes thats has been received for this UTF-8 character.
     fn try_decode_utf8(bytes: &[u8]) -> Self {
-        std::str::from_utf8(
-            &std::iter::repeat(0u8)
-                .take(4 - bytes.len())
-                .chain(bytes.iter().map(|byte_ref| *byte_ref))
-                .collect::<Vec<_>>(),
-        )
-        .ok()
-        .and_then(|string| string.chars().nth(1))
-        .map(|character| ParserStateImpl::Completed(Input::Char(character)))
-        .unwrap_or(ParserStateImpl::Failed)
+        std::str::from_utf8(bytes)
+            .ok()
+            .and_then(|string| string.chars().nth(0))
+            .map(|character| ParserStateImpl::Completed(Input::Char(character)))
+            .unwrap_or(ParserStateImpl::Failed)
     }
 
     fn consume_byte(self, byte: u8) -> Self {
@@ -91,16 +88,38 @@ impl ParserStateImpl {
                 6 => ParserStateImpl::Completed(Input::PageDown),
                 _ => ParserStateImpl::Failed,
             },
-            ParserStateImpl::Start if byte & 0b11100000 == 0b11100000 => {
+            ParserStateImpl::Start if byte >> 5 == 0b110 => {
+                ParserStateImpl::Pending2ByteUtf8(vec![byte])
+            }
+            ParserStateImpl::Start if byte >> 4 == 0b1110 => {
                 ParserStateImpl::Pending3ByteUtf8(vec![byte])
             }
-            ParserStateImpl::Pending3ByteUtf8(bytes)
-                if bytes.len() < 3 && byte & 0b10000000 == 0b10000000 =>
-            {
+            ParserStateImpl::Start if byte >> 3 == 0b11110 => {
+                ParserStateImpl::Pending4ByteUtf8(vec![byte])
+            }
+            ParserStateImpl::Pending2ByteUtf8(bytes) if bytes.len() < 2 && byte >> 6 == 0b10 => {
+                if bytes.len() == 1 {
+                    Self::try_decode_utf8(&[bytes[0], byte])
+                } else {
+                    ParserStateImpl::Pending2ByteUtf8(
+                        bytes.into_iter().chain(std::iter::once(byte)).collect(),
+                    )
+                }
+            }
+            ParserStateImpl::Pending3ByteUtf8(bytes) if bytes.len() < 3 && byte >> 6 == 0b10 => {
                 if bytes.len() == 2 {
-                    Self::try_decode_utf8(&[0, bytes[0], bytes[1], byte])
+                    Self::try_decode_utf8(&[bytes[0], bytes[1], byte])
                 } else {
                     ParserStateImpl::Pending3ByteUtf8(
+                        bytes.into_iter().chain(std::iter::once(byte)).collect(),
+                    )
+                }
+            }
+            ParserStateImpl::Pending4ByteUtf8(bytes) if bytes.len() < 4 && byte >> 6 == 0b10 => {
+                if bytes.len() == 3 {
+                    Self::try_decode_utf8(&[bytes[0], bytes[1], bytes[2], byte])
+                } else {
+                    ParserStateImpl::Pending4ByteUtf8(
                         bytes.into_iter().chain(std::iter::once(byte)).collect(),
                     )
                 }
@@ -243,8 +262,36 @@ mod test {
     }
 
     #[test]
+    fn utf8_2_bytes() {
+        if let ParserStateImpl::Completed(Input::Char('ж')) = "ж"
+            .as_bytes()
+            .into_iter()
+            .fold(ParserStateImpl::Start, |parser_state, byte| {
+                parser_state.consume_byte(*byte)
+            })
+        {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
     fn utf8_3_bytes() {
         if let ParserStateImpl::Completed(Input::Char('好')) = "好"
+            .as_bytes()
+            .into_iter()
+            .fold(ParserStateImpl::Start, |parser_state, byte| {
+                parser_state.consume_byte(*byte)
+            })
+        {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn utf8_4_bytes() {
+        if let ParserStateImpl::Completed(Input::Char('𝝙')) = "𝝙"
             .as_bytes()
             .into_iter()
             .fold(ParserStateImpl::Start, |parser_state, byte| {
