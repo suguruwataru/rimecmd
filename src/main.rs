@@ -66,7 +66,7 @@ enum PrintJsonSchemaFor {
 #[derive(Parser)]
 #[command(version, about)]
 pub struct Args {
-    #[arg(long, short = 'l', value_enum, default_value = "none")]
+    #[arg(long, value_enum, default_value = "none")]
     /// The lowest level of Rime logs to write to stderr.
     ///
     /// When `none`, no logs will be written.
