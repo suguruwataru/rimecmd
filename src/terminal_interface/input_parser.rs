@@ -51,6 +51,7 @@ impl ParserStateImpl {
         match self {
             ParserStateImpl::Start if byte.is_ascii() => match byte {
                 0x03 => ParserStateImpl::Completed(Input::Etx),
+                0x0d => ParserStateImpl::Completed(Input::Cr),
                 0x7f => ParserStateImpl::Completed(Input::Del),
                 0x1b => ParserStateImpl::Esc,
                 _ if byte.is_ascii_control() => unimplemented!(),

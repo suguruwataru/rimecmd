@@ -5,14 +5,15 @@ use std::ops::ControlFlow::{Break, Continue};
 use std::os::fd::AsRawFd;
 
 mod input_parser;
-
 mod input_translator;
+
 #[cfg(test)]
 mod tests;
 
 #[allow(dead_code)]
 pub enum Input {
     Char(char),
+    Cr,
     Del,
     Nul,
     Etx,

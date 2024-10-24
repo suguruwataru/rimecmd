@@ -25,6 +25,10 @@ impl InputTranslator {
     pub fn translate_input(&self, input: Input) -> Option<RimeKey> {
         match input {
             Input::Etx => unreachable!(),
+            Input::Cr => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("Return").unwrap(),
+                mask: 0,
+            }),
             Input::Nul => unimplemented!(),
             Input::Del => Some(RimeKey {
                 keycode: *self.rime_key_name_to_key_code_map.get("BackSpace").unwrap(),
