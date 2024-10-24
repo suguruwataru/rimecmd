@@ -14,6 +14,9 @@ pub struct Request {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Reply {
+    /// `None` when the reply is caused by terminal interaction.
+    /// Otherwise this is always the same as the id of the request this
+    /// reply is for.
     pub id: Option<String>,
     pub result: Result,
 }
