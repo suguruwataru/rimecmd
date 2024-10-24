@@ -1,10 +1,12 @@
 #[allow(dead_code)]
 mod rime_api;
 
+#[allow(dead_code)]
+mod key_processor;
+
 mod error;
 use error::Error;
 
-mod request_handler;
 mod terminal_interface;
 
 #[cfg(test)]
@@ -28,7 +30,7 @@ fn main() {
         rime_api::LogLevel::WARNING,
     );
     let mut terminal_interface = terminal_interface::TerminalInterface::new(
-        request_handler::RequestHandler::new(rime_api::RimeSession::new(&rime_api)),
+        key_processor::KeyProcessor::new(rime_api::RimeSession::new(&rime_api)),
     )
     .unwrap();
     terminal_interface.open().unwrap();
@@ -37,18 +39,18 @@ fn main() {
         height: 0,
     };
     loop {
-        let Some((response, byte_vec)) = terminal_interface.next_response() else {
+        let Some((action, byte_vec)) = terminal_interface.next_response() else {
             unimplemented!();
         };
         terminal_interface.erase_line().unwrap();
         terminal_interface.carriage_return().unwrap();
         terminal_interface.cursor_up(view.height).unwrap();
-        match response {
-            request_handler::Response::ProcessKey {
+        match action {
+            terminal_interface::Action::Update(key_processor::Report {
                 commit_text: _,
                 preview_text: _,
                 menu,
-            } => {
+            }) => {
                 menu.candidates
                     .iter()
                     .take(menu.page_size)
@@ -66,14 +68,13 @@ fn main() {
                     height: menu.page_size,
                 }
             }
-            request_handler::Response::Exit => {
+            terminal_interface::Action::Exit => {
                 terminal_interface.carriage_return().unwrap();
                 terminal_interface.erase_after().unwrap();
                 terminal_interface.flush().unwrap();
                 terminal_interface.exit_raw_mode().unwrap();
                 return;
             }
-            _ => unimplemented!(),
         };
         terminal_interface
             .write(&[b"> ", view.input_bytes.as_slice()].concat())

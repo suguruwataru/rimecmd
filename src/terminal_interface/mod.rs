@@ -1,4 +1,4 @@
-use crate::request_handler::{Request, RequestHandler, Response};
+use crate::key_processor::{KeyProcessor, Report};
 use crate::rime_api::key_mappings::{
     rime_character_to_key_name_map, rime_key_name_to_key_code_map,
 };
@@ -12,9 +12,14 @@ mod input_parser;
 pub struct TerminalInterface<'a> {
     tty_file: std::fs::File,
     original_mode: Option<libc::termios>,
-    request_handler: RequestHandler<'a>,
+    key_processor: KeyProcessor<'a>,
     rime_character_to_key_name_map: HashMap<char, &'static str>,
     rime_key_name_to_key_code_map: HashMap<&'static str, usize>,
+}
+
+pub enum Action {
+    Update(Report),
+    Exit,
 }
 
 type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
@@ -36,7 +41,7 @@ impl<'a> Write for TerminalInterface<'a> {
 }
 
 impl<'a> TerminalInterface<'a> {
-    pub fn next_response(&mut self) -> Option<(Response, Vec<u8>)> {
+    pub fn next_response(&mut self) -> Option<(Action, Vec<u8>)> {
         let std::ops::ControlFlow::Break((input, byte_vec)) =
             std::io::Read::by_ref(&mut self.tty_file).bytes().try_fold(
                 (input_parser::ParserState::new(), vec![]),
@@ -58,14 +63,14 @@ impl<'a> TerminalInterface<'a> {
         };
         match input {
             input_parser::Input::Char(character) => {
-                Some((self.handle_character(character), byte_vec))
+                Some((Action::Update(self.handle_character(character)), byte_vec))
             }
-            input_parser::Input::Etx => Some((Response::Exit, byte_vec)),
+            input_parser::Input::Etx => Some((Action::Exit, byte_vec)),
             _ => unimplemented!(),
         }
     }
 
-    pub fn new(request_handler: RequestHandler<'a>) -> Result<Self> {
+    pub fn new(key_processor: KeyProcessor<'a>) -> Result<Self> {
         Ok(Self {
             tty_file: std::fs::OpenOptions::new()
                 .read(true)
@@ -76,7 +81,7 @@ impl<'a> TerminalInterface<'a> {
                     _ => crate::Error::External(io_err),
                 })?,
             original_mode: None,
-            request_handler,
+            key_processor,
             rime_key_name_to_key_code_map: rime_key_name_to_key_code_map(),
             rime_character_to_key_name_map: rime_character_to_key_name_map(),
         })
@@ -145,17 +150,16 @@ impl<'a> TerminalInterface<'a> {
         Ok(())
     }
 
-    pub fn handle_character(&self, character: char) -> Response {
+    pub fn handle_character(&self, character: char) -> Report {
         match self.rime_character_to_key_name_map.get(&character) {
-            Some(key_name) => self.request_handler.handle_request(Request::ProcessKey {
-                keycode: self
-                    .rime_key_name_to_key_code_map
+            Some(key_name) => self.key_processor.process_key(
+                self.rime_key_name_to_key_code_map
                     .get(key_name)
                     .copied()
                     .unwrap(),
-                mask: 0,
-            }),
-            None => Response::CharactorNotSupported(character),
+                0,
+            ),
+            None => unimplemented!(),
         }
     }
 }
