@@ -418,6 +418,8 @@ impl Drop for RimeSession<'_> {
 }
 
 impl RimeApi {
+    /// * `log_level` - will only be effective this first time this is run.
+    /// See the comment in the definition of `c_setup_rime_api_once`.
     pub fn new<P1, P2>(user_data_dir: P1, shared_data_dir: P2, log_level: LogLevel) -> Self
     where
         P1: AsRef<std::path::Path>,
