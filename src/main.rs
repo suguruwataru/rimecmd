@@ -61,6 +61,11 @@ pub enum Effect {
     StopClient,
     StopServer,
     CommitString(String),
+    RawKeyEvent {
+        keycode: usize,
+        mask: usize,
+        accompanying_commit_string: Option<String>,
+    },
     UpdateUi {
         composition: RimeComposition,
         menu: RimeMenu,

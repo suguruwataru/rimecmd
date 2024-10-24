@@ -70,6 +70,36 @@ impl TerminalMode {
                 }
                 Reply {
                     outcome:
+                        Outcome::Effect(Effect::RawKeyEvent {
+                            keycode,
+                            accompanying_commit_string,
+                            ..
+                        }),
+                    ..
+                } => {
+                    // Rime supports many more keys, but for now only support ASCII here.
+                    let Some((c, true)) = char::from_u32(keycode as u32).map(|c| (c, c.is_ascii()))
+                    else {
+                        continue;
+                    };
+                    if !continue_mode {
+                        terminal_interface.remove_ui()?;
+                        if let Some(commit_string) = accompanying_commit_string {
+                            write!(stdout(), "{}", commit_string)?;
+                        }
+                        writeln!(stdout(), "{}", c.to_string())?;
+                        break;
+                    } else {
+                        terminal_interface.remove_ui()?;
+                        if let Some(commit_string) = accompanying_commit_string {
+                            write!(stdout(), "{}", commit_string)?;
+                        }
+                        writeln!(stdout(), "{}", c.to_string())?;
+                        terminal_interface.setup_ui()?;
+                    }
+                }
+                Reply {
+                    outcome:
                         Outcome::Effect(Effect::UpdateUi {
                             ref menu,
                             ref composition,

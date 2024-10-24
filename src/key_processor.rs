@@ -9,14 +9,20 @@ impl KeyProcessor {
     }
 
     pub fn process_key(&self, rime_session: &RimeSession, keycode: usize, mask: usize) -> Effect {
-        rime_session.process_key(keycode, mask);
-        if let Some(commit_string) = rime_session.get_commit().text {
-            Effect::CommitString(commit_string)
-        } else {
-            let context = rime_session.get_context();
-            Effect::UpdateUi {
-                composition: context.composition,
-                menu: context.menu,
+        let key_processed = rime_session.process_key(keycode, mask);
+        match (key_processed, rime_session.get_commit().text) {
+            (true, Some(commit_string)) => Effect::CommitString(commit_string),
+            (false, commit_string) => Effect::RawKeyEvent {
+                keycode,
+                mask,
+                accompanying_commit_string: commit_string,
+            },
+            _ => {
+                let context = rime_session.get_context();
+                Effect::UpdateUi {
+                    composition: context.composition,
+                    menu: context.menu,
+                }
             }
         }
     }
