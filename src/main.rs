@@ -220,11 +220,7 @@ fn rimecmd() -> Result<()> {
     if args.print_config {
         return print_config(config);
     }
-    if args.force_start_server {
-        remove_file(&config.unix_socket).unwrap_or(());
-        return start_server();
-    }
-    if args.server | args.force_start_server {
+    if args.server {
         let unix_listener = match UnixListener::bind(&config.unix_socket) {
             Ok(unix_listener) => unix_listener,
             Err(error) => match error.kind() {
@@ -238,6 +234,9 @@ fn rimecmd() -> Result<()> {
             },
         };
         return ServerMode::new(config, unix_listener).main();
+    } else if args.force_start_server {
+        remove_file(&config.unix_socket).unwrap_or(());
+        return start_server();
     }
     let server_stream = match UnixStream::connect(&config.unix_socket) {
         Ok(server_stream) => server_stream,
