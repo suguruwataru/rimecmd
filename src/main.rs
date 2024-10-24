@@ -7,7 +7,6 @@ mod json_mode;
 mod json_request_processor;
 mod key_processor;
 mod poll_data;
-#[allow(dead_code)]
 mod rime_api;
 mod server_mode;
 mod terminal_interface;

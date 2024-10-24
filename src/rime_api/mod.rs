@@ -24,12 +24,16 @@ extern "C" {
     );
     fn c_do_maintenance(c_rime_api: *mut CRimeApi);
     fn c_destory_rime_api(rime_api: *mut CRimeApi) -> c_void;
+    #[allow(dead_code)]
     fn c_get_user_data_dir(rime_api: *mut CRimeApi) -> *mut std::ffi::c_char;
+    #[allow(dead_code)]
     fn c_get_shared_data_dir(rime_api: *mut CRimeApi) -> *mut std::ffi::c_char;
+    #[allow(dead_code)]
     fn c_get_schema_list(
         rime_api: *mut CRimeApi,
         schema_list: *mut CRimeSchemaList,
     ) -> std::ffi::c_int;
+    #[allow(dead_code)]
     fn c_free_schema_list(rime_api: *mut CRimeApi, schema_list: *mut CRimeSchemaList) -> c_void;
     fn c_create_session(rime_api: *mut CRimeApi) -> usize;
     fn c_destory_session(rime_api: *mut CRimeApi, session_id: usize) -> c_void;
@@ -79,6 +83,7 @@ extern "C" {
         rime_api: *mut CRimeApi,
         iterator: *mut CRimeCandidateListIterator,
     ) -> c_void;
+    #[allow(dead_code)]
     fn RimeConfigOpen(config_id: *const c_char, config: *mut RimeConfig) -> c_int;
     fn RimeConfigClose(config: *mut RimeConfig) -> c_int;
     fn RimeConfigGetInt(config: *mut RimeConfig, key: *const c_char, value: *mut c_int) -> c_int;
@@ -108,18 +113,21 @@ impl RimeConfigValue for isize {
     }
 }
 
+#[allow(dead_code)]
 impl RimeConfig {
     pub fn get<V: RimeConfigValue>(&mut self, key: impl AsRef<str>) -> Option<V> {
         V::load(self, key)
     }
+}
 
-    pub fn close(mut self) {
+impl Drop for RimeConfig {
+    fn drop(&mut self) {
         // This Rime API function returns False only when the passed
         // in point is nullptr or points to an uninitialed structure.
         // It's impossible with the Rust setup written here.
         // Therefore, the return value can be safely disgarded here.
         unsafe {
-            RimeConfigClose(&mut self as *mut RimeConfig);
+            RimeConfigClose(self as *mut RimeConfig);
         }
     }
 }
@@ -321,11 +329,13 @@ pub struct RimeStatus {
     pub is_ascii_punct: bool,
 }
 
+#[allow(dead_code)]
 pub struct RimeSchema {
     schema_id: String,
     name: String,
 }
 
+#[allow(dead_code)]
 fn rime_schema_from_c(c_rime_schema_item: &CRimeSchemaListItem) -> RimeSchema {
     RimeSchema {
         schema_id: unsafe { std::ffi::CStr::from_ptr(c_rime_schema_item.schema_id) }
@@ -372,6 +382,7 @@ impl RimeSession {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_current_schema(&self) -> String {
         let api = self.api.lock().unwrap();
         let mut buffer = [0; 1024];
@@ -580,6 +591,7 @@ impl RimeApi {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_schema_list(&self) -> Vec<RimeSchema> {
         let mut schema_list = CRimeSchemaList {
             size: 0,
