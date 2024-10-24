@@ -34,7 +34,7 @@ mod test {
     use crate::testing_utilities::{temporary_directory_path, LOG_LEVEL};
 
     #[test]
-    #[ignore = "Test uses global object. It can only be run in one-thread mode."]
+    #[ignore = "not thread safe"]
     fn get_commit() {
         let rime_api = crate::rime_api::RimeApi::new(
             temporary_directory_path(),

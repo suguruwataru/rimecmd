@@ -556,7 +556,7 @@ mod test {
     use crate::testing_utilities::{temporary_directory_path, LOG_LEVEL};
 
     #[test]
-    #[ignore = "Test uses global object. It can only be run in one-thread mode."]
+    #[ignore = "not thread safe"]
     fn get_context() {
         let rime_api = crate::rime_api::RimeApi::new(
             temporary_directory_path(),
@@ -569,7 +569,7 @@ mod test {
     }
 
     #[test]
-    #[ignore = "Test uses global object. It can only be run in one-thread mode."]
+    #[ignore = "not thread safe"]
     fn process_return() {
         let rime_api = crate::rime_api::RimeApi::new(
             temporary_directory_path(),
@@ -585,7 +585,7 @@ mod test {
     }
 
     #[test]
-    #[ignore = "Test uses global object. It can only be run in one-thread mode."]
+    #[ignore = "not thread safe"]
     fn process_backspace() {
         let rime_api = crate::rime_api::RimeApi::new(
             temporary_directory_path(),
