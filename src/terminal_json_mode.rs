@@ -102,11 +102,14 @@ impl TerminalJsonMode {
                 } => {
                     if !self.config.continue_mode {
                         self.terminal_interface.borrow_mut().close()?;
-                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                        stdout().write(&serde_json::to_string(&reply)?.as_bytes())?;
+                        stdout().flush()?;
+                        server_reader.borrow_mut().stream.shutdown(Shutdown::Both)?;
                         break;
                     } else {
                         self.terminal_interface.borrow_mut().remove_ui()?;
-                        writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                        stdout().write(&serde_json::to_string(&reply)?.as_bytes())?;
+                        stdout().flush()?;
                         self.terminal_interface.borrow_mut().setup_ui()?;
                     }
                 }
@@ -118,22 +121,25 @@ impl TerminalJsonMode {
                         }),
                     ..
                 } => {
-                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                    stdout().write(&serde_json::to_string(&reply)?.as_bytes())?;
+                    stdout().flush()?;
                     self.terminal_interface
                         .borrow_mut()
                         .update_ui(composition, menu)?;
                 }
                 Reply {
-                    outcome: Outcome::Effect(Effect::StopClient),
+                    outcome: Outcome::Effect(Effect::StopClient | Effect::StopServer),
                     ..
                 } => {
-                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                    stdout().write(&serde_json::to_string(&reply)?.as_bytes())?;
+                    stdout().flush()?;
                     server_reader.borrow_mut().stream.shutdown(Shutdown::Both)?;
                     self.terminal_interface.borrow_mut().close()?;
                     break;
                 }
                 reply => {
-                    writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
+                    stdout().write(&serde_json::to_string(&reply)?.as_bytes())?;
+                    stdout().flush()?;
                 }
             }
         }
