@@ -57,8 +57,8 @@ impl TerminalMode {
                     ..
                 } => {
                     if !self.config.continue_mode {
-                        writeln!(stdout(), "{}", commit_string)?;
                         self.terminal_interface.close()?;
+                        writeln!(stdout(), "{}", commit_string)?;
                         break;
                     } else {
                         self.terminal_interface.remove_ui()?;
