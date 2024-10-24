@@ -3,7 +3,7 @@ set -x
 set -e
 find src -name '*.c' | xargs clang-check -p build/meson
 find src -name '*.c' | xargs clang-format --dry-run
+export RUSTFLAGS='--deny warnings'
 cargo fmt --check
-cargo check --config 'build.rustflags = ["--deny", "warnings"]'
 cargo test
 cargo test -- --ignored --test-threads=1
