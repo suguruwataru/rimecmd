@@ -59,7 +59,7 @@ impl TerminalMode {
                     ..
                 } => {
                     if !continue_mode {
-                        terminal_interface.close()?;
+                        terminal_interface.remove_ui()?;
                         writeln!(stdout(), "{}", commit_string)?;
                         break;
                     } else {

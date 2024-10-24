@@ -27,7 +27,7 @@ use std::io::{stdout, ErrorKind, Write};
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::process::ExitCode;
+use std::process::{Command, ExitCode, Stdio};
 use terminal_json_mode::TerminalJsonMode;
 use terminal_mode::TerminalMode;
 
@@ -187,6 +187,16 @@ fn print_json_schema(json_schema: PrintJsonSchemaFor) -> Result<()> {
     Ok(())
 }
 
+fn start_server() -> Result<()> {
+    Command::new(std::env::args().nth(0).unwrap())
+        .arg("--server")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    Ok(())
+}
+
 fn rimecmd() -> Result<()> {
     let args = Args::parse();
     if let Some(json_schema) = args.json_schema {
@@ -196,12 +206,15 @@ fn rimecmd() -> Result<()> {
     if args.print_config {
         return print_config(config);
     }
+    if args.force_start_server {
+        remove_file(&config.unix_socket).unwrap_or(());
+        return start_server();
+    }
     if args.server | args.force_start_server {
         let unix_listener = match UnixListener::bind(&config.unix_socket) {
             Ok(unix_listener) => unix_listener,
             Err(error) => match error.kind() {
                 ErrorKind::AddrInUse if args.force_start_server => {
-                    remove_file(&config.unix_socket)?;
                     UnixListener::bind(&config.unix_socket)?
                 }
                 ErrorKind::AddrInUse => {
@@ -212,7 +225,25 @@ fn rimecmd() -> Result<()> {
         };
         return ServerMode::new(config, unix_listener).main();
     }
-    let client = Client::new(UnixStream::connect(&config.unix_socket)?);
+    let server_stream = match UnixStream::connect(&config.unix_socket) {
+        Ok(server_stream) => server_stream,
+        Err(error) => match error.kind() {
+            ErrorKind::NotFound => {
+                start_server()?;
+                loop {
+                    match UnixStream::connect(&config.unix_socket) {
+                        Ok(server_stream) => break server_stream,
+                        Err(error) => match error.kind() {
+                            ErrorKind::NotFound => continue,
+                            _ => return Err(error.into()),
+                        },
+                    }
+                }
+            }
+            _ => return Err(error.into()),
+        },
+    };
+    let client = Client::new(server_stream);
     if args.json {
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
