@@ -409,7 +409,7 @@ impl Drop for RimeSession<'_> {
 }
 
 impl RimeApi {
-    pub fn new<P1, P2>(user_data_dir: P1, shared_data_dir: P2, log_level: Option<LogLevel>) -> Self
+    pub fn new<P1, P2>(user_data_dir: P1, shared_data_dir: P2, log_level: LogLevel) -> Self
     where
         P1: AsRef<std::path::Path>,
         P2: AsRef<std::path::Path>,
@@ -424,11 +424,11 @@ impl RimeApi {
                     user_data_dir.as_ptr(),
                     shared_data_dir.as_ptr(),
                     match log_level {
-                        Some(LogLevel::INFO) => 0,
-                        Some(LogLevel::WARNING) => 1,
-                        Some(LogLevel::ERROR) => 2,
-                        Some(LogLevel::FATAL) => 3,
-                        None => 4,
+                        LogLevel::INFO => 0,
+                        LogLevel::WARNING => 1,
+                        LogLevel::ERROR => 2,
+                        LogLevel::FATAL => 3,
+                        LogLevel::OFF => 4,
                     },
                 )
             },
@@ -475,12 +475,17 @@ pub enum LogLevel {
     WARNING,
     ERROR,
     FATAL,
+    OFF,
 }
 
 mod test {
     #[test]
     fn get_commit() {
-        let rime_api = super::RimeApi::new("./test_user_data_home", "/usr/share/rime-data", None);
+        let rime_api = super::RimeApi::new(
+            "./test_user_data_home",
+            "/usr/share/rime-data",
+            super::LogLevel::OFF,
+        );
         let rime_session = super::RimeSession::new(&rime_api);
         println!("{:?}", rime_api.get_schema_list());
         println!("{:?}", rime_session.session_id);

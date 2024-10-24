@@ -23,11 +23,7 @@ fn main() {
         .map_err(|err| Error::External(err))
         .map(|xdg_directories| xdg_directories.get_data_home())
         .unwrap();
-    let rime_api = RimeApi::new(
-        data_home,
-        "/usr/share/rime-data",
-        Some(rime_api::LogLevel::INFO),
-    );
+    let rime_api = RimeApi::new(data_home, "/usr/share/rime-data", rime_api::LogLevel::INFO);
     println!("{:?}", rime_api.get_user_data_dir());
     println!("{:?}", rime_api.get_shared_data_dir());
     println!("{:?}", rime_api.get_schema_list());
