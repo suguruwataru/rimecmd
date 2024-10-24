@@ -60,6 +60,7 @@ impl TerminalMode {
                 } => {
                     terminal_interface.remove_ui()?;
                     stdout().write(commit_string.as_bytes())?;
+                    stdout().write(b"\n")?;
                     stdout().flush()?;
                     if continue_mode {
                         terminal_interface.setup_ui()?;
@@ -86,6 +87,7 @@ impl TerminalMode {
                         stdout().write(commit_string.as_bytes())?;
                     }
                     stdout().write(c.to_string().as_bytes())?;
+                    stdout().write(b"\n")?;
                     stdout().flush()?;
                     if continue_mode {
                         terminal_interface.setup_ui()?;
