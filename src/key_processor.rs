@@ -1,6 +1,6 @@
 use crate::rime_api::{RimeMenu, RimeSession};
 
-pub enum Instruction {
+pub enum Action {
     CommitString(String),
     UpdateUi { preedit: String, menu: RimeMenu },
 }
@@ -14,13 +14,13 @@ impl<'a> KeyProcessor<'a> {
         Self { rime_session }
     }
 
-    pub fn process_key(&self, keycode: usize, mask: usize) -> Instruction {
+    pub fn process_key(&self, keycode: usize, mask: usize) -> Action {
         self.rime_session.process_key(keycode, mask);
         if let Some(commit_string) = self.rime_session.get_commit().text {
-            Instruction::CommitString(commit_string)
+            Action::CommitString(commit_string)
         } else {
             let context = self.rime_session.get_context();
-            Instruction::UpdateUi {
+            Action::UpdateUi {
                 preedit: context.composition.preedit,
                 menu: context.menu,
             }
@@ -45,7 +45,7 @@ mod test {
         let report = key_processor.process_key(109 /* m */, 0);
         assert_eq!(
             match report {
-                super::Instruction::UpdateUi { preedit, menu } => (preedit, menu.page_size),
+                super::Action::UpdateUi { preedit, menu } => (preedit, menu.page_size),
                 _ => panic!(),
             },
             ("m".into(), 5),
@@ -53,7 +53,7 @@ mod test {
         let report = key_processor.process_key(73 /* I */, 0);
         assert_eq!(
             match report {
-                super::Instruction::UpdateUi { preedit, menu } => (preedit, menu.page_size),
+                super::Action::UpdateUi { preedit, menu } => (preedit, menu.page_size),
                 _ => panic!(),
             },
             ("骂I".into(), 0),
@@ -61,7 +61,7 @@ mod test {
         let response = key_processor.process_key(78 /* N */, 0);
         assert_eq!(
             match response {
-                super::Instruction::UpdateUi { preedit, menu } => (preedit, menu.page_size),
+                super::Action::UpdateUi { preedit, menu } => (preedit, menu.page_size),
                 _ => panic!(),
             },
             ("骂IN".into(), 0),
@@ -69,7 +69,7 @@ mod test {
         let report = key_processor.process_key(89 /* Y */, 0);
         assert_eq!(
             match report {
-                super::Instruction::UpdateUi { preedit, menu } => (preedit, menu.page_size),
+                super::Action::UpdateUi { preedit, menu } => (preedit, menu.page_size),
                 _ => panic!(),
             },
             ("骂INY".into(), 0),
@@ -77,7 +77,7 @@ mod test {
         let report = key_processor.process_key(32 /* space */, 0);
         assert_eq!(
             match report {
-                super::Instruction::CommitString(commit_string) => commit_string,
+                super::Action::CommitString(commit_string) => commit_string,
                 _ => panic!(),
             },
             "骂INY",

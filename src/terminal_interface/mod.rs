@@ -1,4 +1,4 @@
-use crate::key_processor::{Instruction, KeyProcessor};
+use crate::key_processor::{Action, KeyProcessor};
 use std::io::{Read, Write};
 use std::iter::Iterator;
 use std::os::fd::AsRawFd;
@@ -24,41 +24,11 @@ pub struct TerminalInterface<'a> {
     input_translator: input_translator::InputTranslator,
 }
 
-// TODO Remove this enum. Actions can be directly done in
-// terminal_interface.
-pub enum Action {
-    UpdateUi {
-        preedit: String,
-        menu: crate::rime_api::RimeMenu,
-    },
-    CommitString(String),
-    Exit,
-}
-
-impl From<Instruction> for Action {
-    fn from(instruction: crate::key_processor::Instruction) -> Self {
-        match instruction {
-            Instruction::UpdateUi { preedit, menu } => Self::UpdateUi { preedit, menu },
-            Instruction::CommitString(commit_string) => Self::CommitString(commit_string),
-        }
-    }
-}
-
 type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
 
 impl From<std::io::Error> for crate::Error<std::io::Error> {
     fn from(source: std::io::Error) -> Self {
         Self::External(source)
-    }
-}
-
-impl<'a> Write for TerminalInterface<'a> {
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.tty_file.flush()
-    }
-
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.tty_file.write(buf)
     }
 }
 
@@ -79,39 +49,77 @@ impl<'a> TerminalInterface<'a> {
         })
     }
 
-    pub fn next_response(&mut self) -> Option<Action> {
-        let std::ops::ControlFlow::Break(input) =
-            std::io::Read::by_ref(&mut self.tty_file).bytes().try_fold(
-                input_parser::ParserState::new(),
-                |parser_state, maybe_byte| {
-                    let byte = maybe_byte.unwrap();
-                    match parser_state.consume_byte(byte) {
-                        input_parser::ConsumeByteResult::Pending(state) => {
-                            std::ops::ControlFlow::Continue(state)
+    pub fn process_input(&mut self) -> Result<String> {
+        let mut height = 0;
+        self.enter_raw_mode()?;
+        self.erase_line_all()?;
+        self.carriage_return()?;
+        self.erase_after()?;
+        write!(self.tty_file, "> ")?;
+        self.tty_file.flush()?;
+        loop {
+            let std::ops::ControlFlow::Break(input) =
+                std::io::Read::by_ref(&mut self.tty_file).bytes().try_fold(
+                    input_parser::ParserState::new(),
+                    |parser_state, maybe_byte| {
+                        let byte = maybe_byte.unwrap();
+                        match parser_state.consume_byte(byte) {
+                            input_parser::ConsumeByteResult::Pending(state) => {
+                                std::ops::ControlFlow::Continue(state)
+                            }
+                            input_parser::ConsumeByteResult::Completed(input) => {
+                                std::ops::ControlFlow::Break(input)
+                            }
                         }
-                        input_parser::ConsumeByteResult::Completed(input) => {
-                            std::ops::ControlFlow::Break(input)
+                    },
+                )
+            else {
+                unreachable!()
+            };
+            match input {
+                Input::Etx => {
+                    self.cursor_up(height)?;
+                    self.carriage_return()?;
+                    self.erase_after()?;
+                    self.exit_raw_mode()?;
+                    break Ok("".into());
+                }
+                input => {
+                    let Some(input_translator::RimeKey { keycode, mask }) =
+                        self.input_translator.translate_input(input)
+                    else {
+                        unimplemented!()
+                    };
+                    match self.key_processor.process_key(keycode, mask) {
+                        Action::UpdateUi { preedit, menu } => {
+                            self.cursor_up(height)?;
+                            height = menu.page_size;
+                            self.carriage_return()?;
+                            for (index, candidate) in
+                                menu.candidates.iter().take(menu.page_size).enumerate()
+                            {
+                                write!(self.tty_file, "{}. {}", index + 1, candidate.text)?;
+                                self.erase_line_to_right()?;
+                                self.tty_file.write(b"\r\n")?;
+                            }
+                            write!(self.tty_file, "> {}", preedit)?;
+                            self.erase_after()?;
+                            self.tty_file.flush()?;
+                        }
+                        Action::CommitString(commit_string) => {
+                            self.cursor_up(height)?;
+                            self.carriage_return()?;
+                            self.erase_after()?;
+                            self.exit_raw_mode()?;
+                            break Ok(commit_string);
                         }
                     }
-                },
-            )
-        else {
-            unreachable!()
-        };
-        match input {
-            Input::Etx => Some(Action::Exit),
-            input => {
-                let Some(input_translator::RimeKey { keycode, mask }) =
-                    self.input_translator.translate_input(input)
-                else {
-                    unimplemented!()
-                };
-                Some(self.key_processor.process_key(keycode, mask).into())
+                }
             }
         }
     }
 
-    pub fn enter_raw_mode(&mut self) -> Result<()> {
+    fn enter_raw_mode(&mut self) -> Result<()> {
         let mut raw = unsafe { std::mem::zeroed() };
         unsafe {
             libc::cfmakeraw(&mut raw);
@@ -127,34 +135,27 @@ impl<'a> TerminalInterface<'a> {
         Ok(())
     }
 
-    pub fn open(&mut self) -> Result<()> {
-        self.enter_raw_mode()?;
-        self.tty_file.write(b"> ")?;
-        self.tty_file.flush()?;
-        Ok(())
-    }
-
-    pub fn carriage_return(&mut self) -> Result<()> {
+    fn carriage_return(&mut self) -> Result<()> {
         self.tty_file.write(b"\r")?;
         Ok(())
     }
 
-    pub fn erase_line_all(&mut self) -> Result<()> {
+    fn erase_line_all(&mut self) -> Result<()> {
         self.tty_file.write(b"\x1b[2K")?;
         Ok(())
     }
 
-    pub fn erase_line_to_right(&mut self) -> Result<()> {
+    fn erase_line_to_right(&mut self) -> Result<()> {
         self.tty_file.write(b"\x1b[0K")?;
         Ok(())
     }
 
-    pub fn erase_after(&mut self) -> Result<()> {
+    fn erase_after(&mut self) -> Result<()> {
         self.tty_file.write(b"\x1b[0J")?;
         Ok(())
     }
 
-    pub fn cursor_up(&mut self, times: usize) -> Result<()> {
+    fn cursor_up(&mut self, times: usize) -> Result<()> {
         // Cursor up view.height times
         // Only positive integers are accepted, at least in alacritty,
         // so a if is required here.
@@ -164,7 +165,7 @@ impl<'a> TerminalInterface<'a> {
         Ok(())
     }
 
-    pub fn exit_raw_mode(&mut self) -> Result<()> {
+    fn exit_raw_mode(&mut self) -> Result<()> {
         if -1
             == unsafe {
                 libc::tcsetattr(
