@@ -32,8 +32,6 @@ impl ParserState {
 impl ParserStateImpl {
     /// Arguments:
     /// * bytes - The bytes thats has been received for this UTF-8 character.
-    /// * total_byte_count - The expected total byte count of the charater
-    ///   that is being parsed.
     fn try_decode_utf8(bytes: &[u8]) -> Self {
         std::str::from_utf8(
             &std::iter::repeat(0u8)
