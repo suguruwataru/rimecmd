@@ -205,24 +205,22 @@ struct CRimedRimeCommit {
     text: *mut c_char,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct RimeCommit {
     pub text: Option<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct RimeStatus {
-    schema_id: String,
-    schema_name: String,
-    is_disabled: bool,
-    is_composing: bool,
-    is_ascii_mode: bool,
-    is_full_shape: bool,
-    is_simplified: bool,
-    is_traditional: bool,
-    is_ascii_punct: bool,
+    pub schema_id: String,
+    pub schema_name: String,
+    pub is_disabled: bool,
+    pub is_composing: bool,
+    pub is_ascii_mode: bool,
+    pub is_full_shape: bool,
+    pub is_simplified: bool,
+    pub is_traditional: bool,
+    pub is_ascii_punct: bool,
 }
 
 pub struct RimeApi {
@@ -281,7 +279,6 @@ impl<'a> RimeSession<'a> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn process_key(&self, keycode: usize, mask: usize) -> bool {
         1 == unsafe {
             c_process_key(
@@ -346,7 +343,6 @@ impl<'a> RimeSession<'a> {
         context
     }
 
-    #[allow(dead_code)]
     pub fn get_commit(&self) -> RimeCommit {
         let mut c_commit = CRimedRimeCommit {
             text: std::ptr::null_mut(),
@@ -368,7 +364,6 @@ impl<'a> RimeSession<'a> {
         commit
     }
 
-    #[allow(dead_code)]
     pub fn get_status(&self) -> RimeStatus {
         let mut c_status = CRimedRimeStatus {
             schema_id: std::ptr::null_mut(),
