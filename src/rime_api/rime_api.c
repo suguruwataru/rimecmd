@@ -3,23 +3,39 @@
 #include <stdlib.h>
 #include <string.h>
 
-RimeApi *c_create_rime_api(const char *user_data_dir,
+RimeApi *c_get_rime_api() { return rime_get_api(); }
+
+// setup cannot be run a second time per process.
+// The reason is, it initializes Google's log lib, glog, without
+// checking whether it has already been initialized. The glog
+// lib does not allow its initialization to be done twice per process.
+void c_setup_rime_api_once(RimeApi *rime_api, const char *user_data_dir,
                            const char *shared_data_dir, int log_level) {
   RIME_STRUCT(RimeTraits, rime_traits);
   rime_traits.min_log_level = log_level;
   rime_traits.app_name = "rime.rimed";
   rime_traits.user_data_dir = user_data_dir;
   rime_traits.shared_data_dir = shared_data_dir;
-  RimeApi *rime_api = rime_get_api();
   rime_api->setup(&rime_traits);
+}
+
+void c_initialize_rime_api(RimeApi *rime_api, const char *user_data_dir,
+                           const char *shared_data_dir, int log_level) {
+  RIME_STRUCT(RimeTraits, rime_traits);
+  rime_traits.min_log_level = log_level;
+  rime_traits.app_name = "rime.rimed";
+  rime_traits.user_data_dir = user_data_dir;
+  rime_traits.shared_data_dir = shared_data_dir;
   rime_api->initialize(&rime_traits);
+}
+
+void c_do_maintenance(RimeApi *rime_api) {
   // start maintenance returns True when the checks on the fs it does
   // all passed, and it starts a new process to "perform maintenance",
   // where it applies fs changes to the user data home directory.
   if (rime_api->start_maintenance(True)) {
     rime_api->join_maintenance_thread();
   }
-  return rime_api;
 }
 
 void c_destory_rime_api(RimeApi *rime_api) { rime_api->finalize(); }

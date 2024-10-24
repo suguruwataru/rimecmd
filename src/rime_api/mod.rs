@@ -1,13 +1,25 @@
 use crate::Error;
 use std::ffi::{c_char, c_int, c_void, CStr};
+use std::sync::Once;
+
+static RIME_API_SETUP: Once = Once::new();
 
 #[link(name = "rimed", kind = "static")]
 extern "C" {
-    fn c_create_rime_api(
-        user_data_dir: *const std::ffi::c_char,
-        shared_data_dir: *const std::ffi::c_char,
+    fn c_get_rime_api() -> *mut CRimeApi;
+    fn c_setup_rime_api_once(
+        c_rime_api: *mut CRimeApi,
+        user_data_dir: *const c_char,
+        shared_data_dir: *const c_char,
         log_level: c_int,
-    ) -> *mut CRimeApi;
+    );
+    fn c_initialize_rime_api(
+        c_rime_api: *mut CRimeApi,
+        user_data_dir: *const c_char,
+        shared_data_dir: *const c_char,
+        log_level: c_int,
+    );
+    fn c_do_maintenance(c_rime_api: *mut CRimeApi);
     fn c_destory_rime_api(rime_api: *mut CRimeApi) -> c_void;
     fn c_get_user_data_dir(rime_api: *mut CRimeApi) -> *mut std::ffi::c_char;
     fn c_get_shared_data_dir(rime_api: *mut CRimeApi) -> *mut std::ffi::c_char;
@@ -421,18 +433,40 @@ impl RimeApi {
         let shared_data_dir =
             std::boxed::Box::new(c_string_from_path(shared_data_dir.as_ref()).unwrap());
         Self {
-            c_rime_api: unsafe {
-                c_create_rime_api(
-                    user_data_dir.as_ptr(),
-                    shared_data_dir.as_ptr(),
-                    match log_level {
-                        LogLevel::INFO => 0,
-                        LogLevel::WARNING => 1,
-                        LogLevel::ERROR => 2,
-                        LogLevel::FATAL => 3,
-                        LogLevel::OFF => 4,
-                    },
-                )
+            c_rime_api: {
+                let c_rime_api = unsafe { c_get_rime_api() };
+                RIME_API_SETUP.call_once(|| unsafe {
+                    c_setup_rime_api_once(
+                        c_rime_api,
+                        user_data_dir.as_ptr(),
+                        shared_data_dir.as_ptr(),
+                        match log_level {
+                            LogLevel::INFO => 0,
+                            LogLevel::WARNING => 1,
+                            LogLevel::ERROR => 2,
+                            LogLevel::FATAL => 3,
+                            LogLevel::OFF => 4,
+                        },
+                    )
+                });
+                unsafe {
+                    c_initialize_rime_api(
+                        c_rime_api,
+                        user_data_dir.as_ptr(),
+                        shared_data_dir.as_ptr(),
+                        match log_level {
+                            LogLevel::INFO => 0,
+                            LogLevel::WARNING => 1,
+                            LogLevel::ERROR => 2,
+                            LogLevel::FATAL => 3,
+                            LogLevel::OFF => 4,
+                        },
+                    );
+                }
+                unsafe {
+                    c_do_maintenance(c_rime_api);
+                }
+                c_rime_api
             },
             _user_data_dir: user_data_dir,
             _shared_data_dir: shared_data_dir,
