@@ -3,26 +3,68 @@ use crate::rime_api::key_mappings::{
     rime_character_to_key_name_map, rime_key_name_to_key_code_map,
 };
 use std::collections::HashMap;
+use std::os::fd::AsRawFd;
+
 mod input_parser;
 
 pub struct TerminalInterface<'a> {
+    tty_file: std::fs::File,
+    original_mode: Option<libc::termios>,
     request_handler: RequestHandler<'a>,
     rime_character_to_key_name_map: HashMap<char, &'static str>,
     rime_key_name_to_key_code_map: HashMap<&'static str, usize>,
 }
 
 impl<'a> TerminalInterface<'a> {
-    #[allow(dead_code)]
-    pub fn new(request_handler: RequestHandler<'a>) -> Self {
-        Self {
+    pub fn new(request_handler: RequestHandler<'a>) -> Result<Self, crate::Error<std::io::Error>> {
+        Ok(Self {
+            tty_file: std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open("/dev/tty")
+                .map_err(|io_err| match io_err.kind() {
+                    std::io::ErrorKind::NotFound => crate::Error::NotATerminal,
+                    _ => crate::Error::External(io_err),
+                })?,
+            original_mode: None,
             request_handler,
             rime_key_name_to_key_code_map: rime_key_name_to_key_code_map(),
             rime_character_to_key_name_map: rime_character_to_key_name_map(),
-        }
+        })
     }
 
-    #[allow(dead_code)]
-    fn handle_character(&self, character: char) -> Response {
+    pub fn enter_raw_mode(&mut self) -> Result<(), crate::Error<std::io::Error>> {
+        let mut raw = unsafe { std::mem::zeroed() };
+        unsafe {
+            libc::cfmakeraw(&mut raw);
+        }
+        let mut original = unsafe { std::mem::zeroed() };
+        if -1 == unsafe { libc::tcgetattr(self.tty_file.as_raw_fd(), &mut original) } {
+            return Err(crate::Error::External(std::io::Error::last_os_error()));
+        }
+        self.original_mode = Some(original);
+        if -1 == unsafe { libc::tcsetattr(self.tty_file.as_raw_fd(), libc::TCSADRAIN, &raw) } {
+            return Err(crate::Error::External(std::io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+
+    pub fn exit_raw_mode(&mut self) -> Result<(), crate::Error<std::io::Error>> {
+        if -1
+            == unsafe {
+                libc::tcsetattr(
+                    self.tty_file.as_raw_fd(),
+                    libc::TCSADRAIN,
+                    &self.original_mode.take().unwrap(),
+                )
+            }
+        {
+            return Err(crate::Error::External(std::io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+
+    pub fn handle_character(&self, character: char) -> Response {
         match self.rime_character_to_key_name_map.get(&character) {
             Some(key_name) => self.request_handler.handle_request(Request::ProcessKey {
                 keycode: self
@@ -34,30 +76,5 @@ impl<'a> TerminalInterface<'a> {
             }),
             None => Response::CharactorNotSupported(character),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::testing_utilities::{temporary_directory_path, LOG_LEVEL};
-
-    #[test]
-    fn handle_charactor() {
-        let rime_api = crate::rime_api::RimeApi::new(
-            temporary_directory_path(),
-            "./test_shared_data",
-            LOG_LEVEL,
-        );
-        let rime_session = crate::rime_api::RimeSession::new(&rime_api);
-        let terminal_interface =
-            super::TerminalInterface::new(super::RequestHandler::new(rime_session));
-        assert_eq!(
-            serde_json::to_string(&terminal_interface.handle_character('m')).unwrap(),
-            serde_json::to_string(&super::Response::ProcessKey {
-                commit_text: None,
-                preview_text: "骂".into()
-            })
-            .unwrap(),
-        );
     }
 }

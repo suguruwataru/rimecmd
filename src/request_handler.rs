@@ -7,7 +7,7 @@ pub enum Request {
     Status,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub enum Response {
     ProcessKey {
         commit_text: Option<String>,

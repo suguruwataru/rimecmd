@@ -1,5 +1,6 @@
 pub enum Error<E: std::fmt::Debug> {
     NonUtf8DataHomePath,
+    NotATerminal,
     External(E),
 }
 
@@ -10,6 +11,7 @@ impl<E: std::fmt::Debug> std::fmt::Debug for Error<E> {
                 f,
                 "data directory path with non-UTF-8 characters is not supported"
             ),
+            Error::NotATerminal => write!(f, "not connected to a terminal",),
             Error::External(external_error) => external_error.fmt(f),
         }
     }
