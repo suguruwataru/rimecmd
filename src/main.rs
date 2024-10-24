@@ -27,24 +27,46 @@ fn main() {
     )
     .unwrap();
     terminal_interface.open().unwrap();
-    let response = terminal_interface
-        .handle_character(std::io::stdin().bytes().nth(0).unwrap().unwrap() as char);
+    std::io::stdin()
+        .bytes()
+        .take(2)
+        .map(|maybe_byte| {
+            let character = maybe_byte.unwrap() as char;
+            let response = terminal_interface.handle_character(character);
+            std::io::stdout().write(b"\r\x1b[0K").unwrap();
+            match response {
+                request_handler::Response::ProcessKey {
+                    commit_text: _,
+                    preview_text: _,
+                    menu,
+                } => menu
+                    .candidates
+                    .iter()
+                    .take(menu.page_size)
+                    .enumerate()
+                    .for_each(|(index, candidate)| {
+                        write!(std::io::stdout(), "{}. {}\r\n", index + 1, candidate.text,)
+                            .unwrap();
+                    }),
+                _ => unimplemented!(),
+            }
+            character
+        })
+        .fold(vec![], |sequence, character| {
+            let sequence: Vec<_> = sequence
+                .into_iter()
+                .chain(std::iter::once(character))
+                .collect();
+            write!(
+                std::io::stdout(),
+                "> {}",
+                sequence.iter().collect::<String>()
+            )
+            .unwrap();
+            std::io::stdout().flush().unwrap();
+            sequence
+        });
     write!(std::io::stdout(), "\r\n").unwrap();
-    match response {
-        request_handler::Response::ProcessKey {
-            commit_text: _,
-            preview_text: _,
-            menu,
-        } => menu
-            .candidates
-            .iter()
-            .take(menu.page_size)
-            .enumerate()
-            .for_each(|(index, candidate)| {
-                write!(std::io::stdout(), "{}. {}\r\n", index + 1, candidate.text,).unwrap();
-            }),
-        _ => unimplemented!(),
-    }
     std::io::stdout().flush().unwrap();
     terminal_interface.exit_raw_mode().unwrap();
 }
