@@ -79,8 +79,11 @@ fn main() {
             .write(&[b"> ", view.input_bytes.as_slice()].concat())
             .unwrap();
     }
-    terminal_interface.carriage_return().unwrap();
-    write!(terminal_interface, "\n").unwrap();
-    terminal_interface.flush().unwrap();
-    terminal_interface.exit_raw_mode().unwrap();
+    #[allow(unreachable_code)]
+    {
+        terminal_interface.carriage_return().unwrap();
+        terminal_interface.write(b"\n").unwrap();
+        terminal_interface.flush().unwrap();
+        terminal_interface.exit_raw_mode().unwrap();
+    }
 }
