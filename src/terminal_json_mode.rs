@@ -85,11 +85,7 @@ impl TerminalJsonMode {
                     client.borrow_mut().send_bytes(&bytes)?;
                     continue;
                 }
-                Input::ServerReply(ReplyState::Complete(reply)) => {
-                    stdout().write(&serde_json::to_string(&reply).unwrap().as_bytes())?;
-                    stdout().flush()?;
-                    reply
-                }
+                Input::ServerReply(ReplyState::Complete(reply)) => reply,
                 Input::ServerReply(ReplyState::Incomplete) => continue,
             };
             match reply {
