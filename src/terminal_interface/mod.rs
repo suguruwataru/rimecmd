@@ -24,6 +24,16 @@ impl From<std::io::Error> for crate::Error<std::io::Error> {
     }
 }
 
+impl<'a> Write for TerminalInterface<'a> {
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.tty_file.flush()
+    }
+
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.tty_file.write(buf)
+    }
+}
+
 impl<'a> TerminalInterface<'a> {
     pub fn new(request_handler: RequestHandler<'a>) -> Result<Self> {
         Ok(Self {
@@ -62,6 +72,26 @@ impl<'a> TerminalInterface<'a> {
         self.enter_raw_mode()?;
         self.tty_file.write(b"> ")?;
         self.tty_file.flush()?;
+        Ok(())
+    }
+
+    pub fn carriage_return(&mut self) -> Result<()> {
+        self.tty_file.write(b"\r")?;
+        Ok(())
+    }
+
+    pub fn erase_line(&mut self) -> Result<()> {
+        self.tty_file.write(b"\x1b[2K")?;
+        Ok(())
+    }
+
+    pub fn cursor_up(&mut self, times: usize) -> Result<()> {
+        // Cursor up view.height times
+        // Only positive integers are accepted, at least in alacritty,
+        // so a if is required here.
+        if times != 0 {
+            write!(self.tty_file, "\x1b[{}A", times)?;
+        }
         Ok(())
     }
 

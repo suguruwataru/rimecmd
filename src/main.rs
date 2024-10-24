@@ -12,6 +12,11 @@ mod testing_utilities;
 
 use std::io::{Read, Write};
 
+struct View {
+    input_characters: Vec<char>,
+    height: usize,
+}
+
 fn main() {
     let data_home = xdg::BaseDirectories::with_prefix("rimed")
         .map_err(|err| Error::External(err))
@@ -27,46 +32,53 @@ fn main() {
     )
     .unwrap();
     terminal_interface.open().unwrap();
-    std::io::stdin()
-        .bytes()
-        .take(2)
-        .map(|maybe_byte| {
+    std::io::stdin().bytes().take(2).fold(
+        View {
+            input_characters: vec![],
+            height: 0,
+        },
+        |view, maybe_byte| {
             let character = maybe_byte.unwrap() as char;
             let response = terminal_interface.handle_character(character);
-            std::io::stdout().write(b"\r\x1b[0K").unwrap();
-            match response {
+            terminal_interface.erase_line().unwrap();
+            terminal_interface.carriage_return().unwrap();
+            terminal_interface.cursor_up(view.height).unwrap();
+            let view = match response {
                 request_handler::Response::ProcessKey {
                     commit_text: _,
                     preview_text: _,
                     menu,
-                } => menu
-                    .candidates
-                    .iter()
-                    .take(menu.page_size)
-                    .enumerate()
-                    .for_each(|(index, candidate)| {
-                        write!(std::io::stdout(), "{}. {}\r\n", index + 1, candidate.text,)
-                            .unwrap();
-                    }),
+                } => {
+                    menu.candidates
+                        .iter()
+                        .take(menu.page_size)
+                        .enumerate()
+                        .for_each(|(index, candidate)| {
+                            write!(terminal_interface, "{}. {}\r\n", index + 1, candidate.text,)
+                                .unwrap();
+                        });
+                    View {
+                        input_characters: view
+                            .input_characters
+                            .into_iter()
+                            .chain(std::iter::once(character))
+                            .collect(),
+                        height: menu.page_size,
+                    }
+                }
                 _ => unimplemented!(),
-            }
-            character
-        })
-        .fold(vec![], |sequence, character| {
-            let sequence: Vec<_> = sequence
-                .into_iter()
-                .chain(std::iter::once(character))
-                .collect();
+            };
             write!(
-                std::io::stdout(),
+                terminal_interface,
                 "> {}",
-                sequence.iter().collect::<String>()
+                view.input_characters.iter().collect::<String>()
             )
             .unwrap();
-            std::io::stdout().flush().unwrap();
-            sequence
-        });
-    write!(std::io::stdout(), "\r\n").unwrap();
-    std::io::stdout().flush().unwrap();
+            view
+        },
+    );
+    terminal_interface.carriage_return().unwrap();
+    write!(terminal_interface, "\n").unwrap();
+    terminal_interface.flush().unwrap();
     terminal_interface.exit_raw_mode().unwrap();
 }
