@@ -90,7 +90,7 @@ impl TerminalJsonMode {
             };
             match reply {
                 Reply {
-                    outcome: Outcome::Effect(Effect::CommitString(_)),
+                    outcome: Outcome::Effect(Effect::CommitString(_) | Effect::RawKeyEvent { .. }),
                     ..
                 } => {
                     if !continue_mode {
