@@ -279,16 +279,6 @@ impl<'a> TerminalInterface<'a> {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    fn cursor_right(&mut self, times: usize) -> Result<()> {
-        // Only positive integers are accepted, at least in alacritty,
-        // so a if is required here.
-        if times != 0 {
-            write!(self.tty_file, "\x1b[{}C", times)?;
-        }
-        Ok(())
-    }
-
     fn exit_raw_mode(&mut self) -> Result<()> {
         if -1
             == unsafe {
