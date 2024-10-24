@@ -142,12 +142,12 @@ impl TerminalInterface {
     }
 
     fn save_cursor(&mut self) -> Result<()> {
-        self.tty_file.write(b"\x1b[s")?;
+        self.tty_file.write(b"\x1b7")?;
         Ok(())
     }
 
     fn restore_cursor(&mut self) -> Result<()> {
-        self.tty_file.write(b"\x1b[u")?;
+        self.tty_file.write(b"\x1b8")?;
         Ok(())
     }
 
