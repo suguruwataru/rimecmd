@@ -79,13 +79,13 @@ pub struct Args {
     /// A path to the file where the client duplicates requests to.
     ///
     /// Used for debugging.
-    #[arg(short, long = "duplicate-requests")]
+    #[arg(long = "duplicate-requests")]
     duplicate_requests: Option<PathBuf>,
     /// A path to the file where the server's stderr gets redirected to.
     ///
     /// Used for debugging.
     /// Ignored unless `--force-restart-server` is used.
-    #[arg(short, long = "redirect-server-stderr")]
+    #[arg(long = "redirect-server-stderr")]
     redirect_server_stderr: Option<PathBuf>,
     #[arg(long, value_enum, default_value = "none")]
     /// The lowest level of Rime logs to write to stderr.
