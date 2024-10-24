@@ -98,8 +98,15 @@ fn main() -> ExitCode {
         );
         match maybe_terminal_interface {
             Ok(mut terminal_interface) => {
-                if let Some(commit_string) = terminal_interface.process_input().unwrap() {
-                    writeln!(stdout(), "{}", commit_string).unwrap();
+                loop {
+                    if let Some(commit_string) = terminal_interface.process_input().unwrap() {
+                        writeln!(stdout(), "{}", commit_string).unwrap();
+                        if !args.continue_mode {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
                 }
                 ExitCode::SUCCESS
             }
