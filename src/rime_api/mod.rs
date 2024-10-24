@@ -1,6 +1,5 @@
 pub mod key_mappings;
 use crate::Error;
-use serde::Serialize;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::Once;
 
@@ -111,13 +110,12 @@ struct CRimedRimeContext {
     menu: CRimeMenu,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct RimeCandidate {
     pub text: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct RimeMenu {
     pub candidates: Vec<RimeCandidate>,
     pub page_size: usize,
@@ -159,7 +157,6 @@ fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize, menu: &CRimeMenu)
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct RimeContext {
     pub commit_text_preview: String,
@@ -208,12 +205,10 @@ struct CRimedRimeCommit {
     text: *mut c_char,
 }
 
-#[derive(Debug)]
 pub struct RimeCommit {
     pub text: Option<String>,
 }
 
-#[derive(Debug)]
 pub struct RimeStatus {
     pub schema_id: String,
     pub schema_name: String,
@@ -226,8 +221,6 @@ pub struct RimeStatus {
     pub is_ascii_punct: bool,
 }
 
-#[allow(dead_code)]
-#[derive(Debug)]
 pub struct RimeSchema {
     schema_id: String,
     name: String,
@@ -262,7 +255,6 @@ pub struct RimeSession<'a> {
 }
 
 impl<'a> RimeSession<'a> {
-    #[allow(dead_code)]
     pub fn new(api: &'a RimeApi) -> Self {
         Self {
             session_id: unsafe { c_create_session(api.c_rime_api) },
@@ -281,7 +273,6 @@ impl<'a> RimeSession<'a> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn get_current_schema(&self) -> String {
         let mut buffer = [0; 1024];
         if 0 == unsafe {
@@ -300,7 +291,6 @@ impl<'a> RimeSession<'a> {
             .unwrap()
     }
 
-    #[allow(dead_code)]
     pub fn get_context(&self) -> RimeContext {
         let mut c_context = CRimedRimeContext {
             commit_text_preview: std::ptr::null_mut(),
@@ -505,7 +495,6 @@ impl RimeApi {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Copy, Clone)]
 pub enum LogLevel {
     INFO,

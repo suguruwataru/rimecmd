@@ -1,13 +1,11 @@
 use crate::rime_api::{RimeMenu, RimeSession};
-use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[allow(dead_code)]
 pub enum Request {
     ProcessKey { keycode: usize, mask: usize },
     Status,
 }
 
-#[derive(Debug, Serialize)]
 pub enum Response {
     ProcessKey {
         commit_text: Option<String>,
@@ -141,12 +139,11 @@ mod test {
         );
         let rime_session = super::RimeSession::new(&rime_api);
         let request_handler = super::RequestHandler::new(rime_session);
-        assert_eq!(
-            serde_json::to_string(&request_handler.handle_request(super::Request::Status)).unwrap(),
-            serde_json::to_string(&super::Response::Status {
-                schema_name: "luna_pinyin".into()
-            })
-            .unwrap(),
-        );
+        let super::Response::Status { schema_name } =
+            request_handler.handle_request(super::Request::Status)
+        else {
+            panic!();
+        };
+        assert_eq!("luna_pinyin", schema_name);
     }
 }
