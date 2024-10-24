@@ -21,7 +21,9 @@ use rime_api::{RimeComposition, RimeMenu};
 use schemars::schema_for;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::io::{stdout, Write};
+use std::fs::remove_file;
+use std::io::{stdout, ErrorKind, Write};
+use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use terminal_json_mode::TerminalJsonMode;
@@ -113,6 +115,19 @@ pub struct Args {
     /// The output is in JSON format.
     #[arg(long)]
     print_config: bool,
+    #[arg(long, short = 'f')]
+    /// Start server even if the unix socket already exists.
+    ///
+    /// Normally, the server creates the unix socket it uses. However, it is
+    /// possible that when it tries to create the unix socket, it finds that
+    /// a file already exists at the path. This normally means that another
+    /// instance of server is running. However, other things might also
+    /// cause this to happen, such as that a server has crashed. If you can
+    /// be sure that there is not another server instance running, and that
+    /// the file at the path does not contain information you want to keep,
+    /// use this flag. It will remove the file if it exists and then start
+    /// the server as normal.
+    force_start_server: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -181,8 +196,21 @@ fn rimecmd() -> Result<()> {
     if args.print_config {
         return print_config(config);
     }
-    if args.server {
-        return ServerMode::new(config).main();
+    if args.server | args.force_start_server {
+        let unix_listener = match UnixListener::bind(&config.unix_socket) {
+            Ok(unix_listener) => unix_listener,
+            Err(error) => match error.kind() {
+                ErrorKind::AddrInUse if args.force_start_server => {
+                    remove_file(&config.unix_socket)?;
+                    UnixListener::bind(&config.unix_socket)?
+                }
+                ErrorKind::AddrInUse => {
+                    return Err(Error::UnixSocketAlreadyExists);
+                }
+                _ => return Err(error.into()),
+            },
+        };
+        return ServerMode::new(config, unix_listener).main();
     }
     if args.json {
         if args.tty {
@@ -206,6 +234,21 @@ fn rimecmd() -> Result<()> {
 fn main() -> ExitCode {
     match rimecmd() {
         Ok(_) => ExitCode::SUCCESS,
+        Err(Error::UnixSocketAlreadyExists) => {
+            eprintln!(
+                "When the server tries to create a unix socket to listen to, \
+                it finds that there already exists one."
+            );
+            eprintln!("This usually means that a server is already running.");
+            eprintln!(
+                "If you are sure that there does not exist \
+                an already running server instance, use `--force-restart-server`."
+            );
+            eprintln!(
+                "This will remove the already existing unix socket and then start the server."
+            );
+            ExitCode::from(22)
+        }
         Err(err) => {
             eprintln!("{:?}", err);
             ExitCode::FAILURE

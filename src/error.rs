@@ -4,6 +4,7 @@ pub enum Error {
     UnsupportedInput,
     ClientShouldCloseConnection,
     ServerClosedConnection,
+    UnixSocketAlreadyExists,
     InputClosed,
     Io(std::io::Error),
     Json(serde_json::Error),
@@ -42,6 +43,9 @@ impl std::fmt::Debug for Error {
             Error::ServerClosedConnection => write!(f, "server closed connection"),
             Error::ClientShouldCloseConnection => {
                 write!(f, "client should have closed connection, but it didn't")
+            }
+            Error::UnixSocketAlreadyExists => {
+                write!(f, "the unix socket to use already exists")
             }
             Error::Io(io_err) => io_err.fmt(f),
             Error::Json(json_err) => json_err.fmt(f),

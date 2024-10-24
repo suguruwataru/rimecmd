@@ -14,15 +14,18 @@ use std::thread;
 
 pub struct ServerMode {
     config: Config,
+    unix_listener: UnixListener,
 }
 
 impl ServerMode {
-    pub fn new(config: Config) -> Self {
-        Self { config }
+    pub fn new(config: Config, unix_listener: UnixListener) -> Self {
+        Self {
+            config,
+            unix_listener,
+        }
     }
 
     pub fn main(self) -> Result<()> {
-        let listener = UnixListener::bind(&self.config.unix_socket).unwrap();
         let (error_sender, error_receiver) = channel();
         let (stop_sender, stop_receiver) = channel();
         let error_sender = Arc::new(Mutex::new(error_sender));
@@ -37,7 +40,7 @@ impl ServerMode {
             self.config.rime_log_level,
         )));
         thread::spawn(move || {
-            for stream in listener.incoming() {
+            for stream in self.unix_listener.incoming() {
                 let stream = match stream {
                     Ok(stream) => stream,
                     Err(err) => {
