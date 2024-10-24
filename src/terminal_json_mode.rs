@@ -18,7 +18,9 @@ pub enum Data {
 
 impl ReadData<Data> for Stdin {
     fn read_data(&mut self) -> Result<Data> {
-        let Bytes::StdinBytes(bytes) = ReadData::<Bytes>::read_data(self)? else {
+        let crate::json_mode::Input::Stdin(bytes) =
+            ReadData::<crate::json_mode::Input>::read_data(self)?
+        else {
             unreachable!()
         };
         Ok(Data::StdinBytes(bytes))

@@ -1,22 +1,35 @@
+use crate::client::Client;
 use crate::json_request_processor::{Outcome, Reply};
-use crate::Config;
 use crate::Effect;
 use crate::Result;
 use std::cell::RefCell;
 use std::io::{stdin, stdout, Read, Write};
-use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::rc::Rc;
 
+use crate::client::ServerReply;
 use crate::poll_data::{PollData, ReadData};
 
+#[allow(dead_code)]
 pub enum Bytes {
     StdinBytes(Vec<u8>),
     ServerBytes(Vec<u8>),
 }
 
+pub enum Input {
+    Stdin(Vec<u8>),
+    ServerReply(ServerReply),
+}
+
+impl From<ServerReply> for Input {
+    fn from(source: ServerReply) -> Self {
+        Self::ServerReply(source)
+    }
+}
+
 pub struct JsonMode {
-    config: Config,
+    client: Client,
+    continue_mode: bool,
 }
 
 pub struct Stdin {
@@ -27,13 +40,13 @@ pub struct ServerReader {
     pub stream: UnixStream,
 }
 
-impl ReadData<Bytes> for Stdin {
-    fn read_data(&mut self) -> Result<Bytes> {
+impl ReadData<Input> for Stdin {
+    fn read_data(&mut self) -> Result<Input> {
         let mut buf = [0; 1024];
         let count = self.stdin.read(&mut buf)?;
-        Ok(Bytes::StdinBytes(Vec::from(&buf[0..count])))
+        Ok(Input::Stdin(Vec::from(&buf[0..count])))
     }
-    fn register(&self, poll_data: &mut PollData<Bytes>) -> Result<()> {
+    fn register(&self, poll_data: &mut PollData<Input>) -> Result<()> {
         poll_data.register(&self.stdin)?;
         Ok(())
     }
@@ -52,48 +65,52 @@ impl ReadData<Bytes> for ServerReader {
 }
 
 impl JsonMode {
-    pub fn new(config: Config) -> Self {
-        Self { config }
+    pub fn new(client: Client, continue_mode: bool) -> Self {
+        Self {
+            client,
+            continue_mode,
+        }
     }
 
     pub fn main(self) -> Result<()> {
-        let stream = UnixStream::connect(&self.config.unix_socket)?;
-        let mut server_writer = stream.try_clone()?;
-        let server_reader = Rc::new(RefCell::new(ServerReader { stream }));
+        let client = Rc::new(RefCell::new(self.client));
         let stdin = Rc::new(RefCell::new(Stdin { stdin: stdin() }));
-        let mut poll_data = PollData::<Bytes>::new(&[
-            Rc::clone(&server_reader) as Rc<RefCell<dyn ReadData<Bytes>>>,
-            Rc::clone(&stdin) as Rc<RefCell<dyn ReadData<Bytes>>>,
+        let mut poll_data = PollData::<Input>::new(&[
+            Rc::clone(&client) as Rc<RefCell<dyn ReadData<Input>>>,
+            Rc::clone(&stdin) as Rc<RefCell<dyn ReadData<Input>>>,
         ])?;
-        let mut json_bytes = vec![];
         loop {
-            let bytes = poll_data.poll()?;
-            match bytes {
-                Bytes::StdinBytes(bytes) => {
-                    server_writer.write(&bytes)?;
-                    server_writer.flush()?;
+            let data = poll_data.poll()?;
+            match data {
+                Input::Stdin(bytes) => {
+                    client.borrow_mut().send_bytes(&bytes)?;
                 }
-                Bytes::ServerBytes(bytes) => {
-                    stdout().write(&bytes)?;
+                Input::ServerReply(ServerReply::Complete(reply)) => {
+                    stdout().write(&serde_json::to_string(&reply).unwrap().as_bytes())?;
                     stdout().flush()?;
-                    json_bytes.extend_from_slice(&bytes);
-                    match serde_json::from_slice(&json_bytes) {
-                        Ok(Reply {
+                    match reply {
+                        Reply {
                             outcome: Outcome::Effect(Effect::StopClient | Effect::StopServer),
                             ..
-                        }) => {
-                            json_bytes.clear();
-                            server_reader.borrow_mut().stream.shutdown(Shutdown::Read)?;
-                            server_writer.shutdown(Shutdown::Write)?;
+                        } => {
                             break;
                         }
-                        Ok(_) => json_bytes.clear(),
-                        Err(err) if err.is_eof() => continue,
-                        Err(err) => return Err(err.into()),
+                        Reply {
+                            outcome: Outcome::Effect(Effect::CommitString(_)),
+                            ..
+                        } => {
+                            if !self.continue_mode {
+                                break;
+                            }
+                        }
+                        _ => (),
                     }
                 }
+                Input::ServerReply(ServerReply::Incomplete) => continue,
             }
         }
+        drop(poll_data);
+        Rc::into_inner(client).unwrap().into_inner().shutdown()?;
         Ok(())
     }
 }

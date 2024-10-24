@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod testing_utilities;
 
+mod client;
 mod error;
 mod json_mode;
 mod json_request_processor;
@@ -13,6 +14,7 @@ mod server_mode;
 mod terminal_interface;
 mod terminal_json_mode;
 mod terminal_mode;
+use crate::client::Client;
 use crate::server_mode::ServerMode;
 use clap::Parser;
 use error::Error;
@@ -24,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::remove_file;
 use std::io::{stdout, ErrorKind, Write};
 use std::os::unix::net::UnixListener;
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use terminal_json_mode::TerminalJsonMode;
@@ -212,18 +215,19 @@ fn rimecmd() -> Result<()> {
         };
         return ServerMode::new(config, unix_listener).main();
     }
+    let client = Client::new(UnixStream::connect(&config.unix_socket)?);
     if args.json {
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
             return TerminalJsonMode::new(config, terminal_interface).main();
         } else {
-            return JsonMode::new(config).main();
+            return JsonMode::new(client, args.continue_mode).main();
         };
     }
     let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
     match maybe_terminal_interface {
         Ok(terminal_interface) => return TerminalMode::new(config, terminal_interface).main(),
-        Err(Error::NotATerminal) => return JsonMode::new(config).main(),
+        Err(Error::NotATerminal) => return JsonMode::new(client, args.continue_mode).main(),
         err => {
             err?;
         }
