@@ -6,26 +6,27 @@ mod json_mode;
 mod json_request_processor;
 mod json_source;
 mod key_processor;
+mod poll_data;
 #[allow(dead_code)]
 mod rime_api;
 mod server_mode;
 mod terminal_interface;
 mod terminal_json_mode;
 mod terminal_mode;
-use error::Error;
-type Result<T> = std::result::Result<T, Error>;
 
+use error::Error;
+use json_mode::JsonMode;
 use json_source::JsonSource;
 use rime_api::{RimeComposition, RimeMenu};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use server_mode::ServerMode;
 use std::path::PathBuf;
+use std::sync::{mpsc::channel, Arc, Mutex};
 use terminal_json_mode::TerminalJsonMode;
 use terminal_mode::TerminalMode;
-mod poll_data;
-use json_mode::JsonMode;
-use std::sync::{mpsc::channel, Arc, Mutex};
+
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(
