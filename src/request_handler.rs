@@ -54,10 +54,17 @@ impl<'a> RequestHandler<'a> {
 
 #[cfg(test)]
 mod test {
+    fn temporary_directory_path() -> String {
+        format!(
+            "temporary_test_directories/user_data_home_{:08X}",
+            rand::random::<u32>()
+        )
+    }
+
     #[test]
     fn get_commit() {
         let rime_api = crate::rime_api::RimeApi::new(
-            "./test_user_data_home",
+            temporary_directory_path(),
             "./test_shared_data",
             crate::rime_api::LogLevel::OFF,
         );
@@ -113,7 +120,7 @@ mod test {
     #[test]
     fn test_handle_status_request() {
         let rime_api = crate::rime_api::RimeApi::new(
-            "./test_user_data_home",
+            temporary_directory_path(),
             "./test_shared_data",
             crate::rime_api::LogLevel::OFF,
         );
