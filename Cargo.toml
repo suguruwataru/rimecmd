@@ -7,7 +7,6 @@ description = "Interact with the Rime input method through commands."
 [dependencies]
 clap = { version = "4.4.11", features = ["derive"] }
 libc = "0.2.150"
-mio = { version = "0.8.10", features = ["os-poll", "os-ext"] }
 schemars = "0.8.16"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
