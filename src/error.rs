@@ -3,7 +3,7 @@ pub enum Error {
     NotATerminal,
     UnsupportedInput,
     ClientShouldCloseConnection,
-    NotOnlyClient,
+    MoreThanOneClient,
     ServerClosedConnection,
     UnixSocketAlreadyExists,
     InputClosed,
@@ -48,7 +48,7 @@ impl std::fmt::Debug for Error {
             Error::UnixSocketAlreadyExists => {
                 write!(f, "the unix socket to use already exists")
             }
-            Error::NotOnlyClient => {
+            Error::MoreThanOneClient => {
                 write!(f, "there are other clients, so server cannot stop")
             }
             Error::Io(io_err) => io_err.fmt(f),

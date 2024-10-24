@@ -29,8 +29,17 @@ pub struct Reply {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Outcome {
     Effect(Effect),
-    Error { code: usize, message: String },
+    Error { id: ErrorId, message: String },
     SchemaName(String),
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum ErrorId {
+    UnsupportedInput,
+    MoreThanOneClient,
+    JsonError,
+    IoError,
 }
 
 impl TryFrom<crate::Error> for Outcome {
@@ -40,19 +49,19 @@ impl TryFrom<crate::Error> for Outcome {
         use crate::Error::*;
         match error {
             UnsupportedInput => Ok(Outcome::Error {
-                code: 22,
+                id: ErrorId::UnsupportedInput,
                 message: "received unsupported input".into(),
             }),
-            NotOnlyClient => Ok(Outcome::Error {
-                code: 23,
-                message: format!("{:?}", NotOnlyClient),
+            MoreThanOneClient => Ok(Outcome::Error {
+                id: ErrorId::MoreThanOneClient,
+                message: format!("{:?}", MoreThanOneClient),
             }),
             Json(json_error) => Ok(Outcome::Error {
-                code: 24,
+                id: ErrorId::JsonError,
                 message: format!("{}", json_error),
             }),
             Io(io_error) => Ok(Outcome::Error {
-                code: 25,
+                id: ErrorId::IoError,
                 message: format!("{}", io_error),
             }),
             err => Err(err),

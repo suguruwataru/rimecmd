@@ -2,7 +2,8 @@
 name = "rimecmd"
 version = "0.1.0"
 edition = "2021"
-description = "Use Rime via the command line."
+description = """
+Interact with the Rime input method through commands."""
 
 [dependencies]
 clap = { version = "4.4.11", features = ["derive"] }

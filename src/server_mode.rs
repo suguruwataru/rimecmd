@@ -186,7 +186,7 @@ impl Session {
                         client_stream.write(
                             serde_json::to_string(&Reply {
                                 id: id.clone(),
-                                outcome: Error::NotOnlyClient.try_into().unwrap(),
+                                outcome: Error::MoreThanOneClient.try_into().unwrap(),
                             })?
                             .as_bytes(),
                         )?;

@@ -103,7 +103,7 @@ pub struct Args {
     /// and XDG specification. Use `--print-config` to see the value.
     unix_socket: Option<PathBuf>,
     #[arg(long)]
-    /// Run `rimecmd` in server mode.
+    /// Run in server mode.
     ///
     /// When Rime, on which `rimecmd` is based, runs, it manipulates data in the
     /// user data directory (see `--print-confg`). It is not a good idea to
