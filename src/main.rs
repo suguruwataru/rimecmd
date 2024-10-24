@@ -155,10 +155,9 @@ fn print_config(config: Config) -> Result<()> {
     Ok(())
 }
 
-fn rimecmd() -> Result<()> {
-    let args = Args::parse();
-    match args.json_schema {
-        Some(PrintJsonSchemaFor::Request) => {
+fn print_json_schema(json_schema: PrintJsonSchemaFor) -> Result<()> {
+    match json_schema {
+        PrintJsonSchemaFor::Request => {
             writeln!(
                 stdout(),
                 "{}",
@@ -166,14 +165,21 @@ fn rimecmd() -> Result<()> {
                     .unwrap()
             )?;
         }
-        Some(PrintJsonSchemaFor::Reply) => {
+        PrintJsonSchemaFor::Reply => {
             writeln!(
                 stdout(),
                 "{}",
                 serde_json::to_string_pretty(&schema_for!(json_request_processor::Reply)).unwrap()
             )?;
         }
-        None => (),
+    };
+    Ok(())
+}
+
+fn rimecmd() -> Result<()> {
+    let args = Args::parse();
+    if let Some(json_schema) = args.json_schema {
+        return print_json_schema(json_schema);
     }
     let config = Config::try_from(&args)?;
     if args.print_config {
