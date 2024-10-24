@@ -1,5 +1,4 @@
 use crate::json_request_processor::{Outcome, Reply};
-use crate::rime_api::RimeSession;
 use crate::Config;
 use crate::Effect;
 use crate::Result;
@@ -15,9 +14,8 @@ pub enum Bytes {
     ServerBytes(Vec<u8>),
 }
 
-pub struct JsonMode<'a> {
-    pub config: Config,
-    pub rime_session: RimeSession<'a>,
+pub struct JsonMode {
+    config: Config,
 }
 
 pub struct Stdin {
@@ -52,7 +50,11 @@ impl ReadData<Bytes> for ServerReader {
     }
 }
 
-impl<'a> JsonMode<'a> {
+impl JsonMode {
+    pub fn new(config: Config) -> Self {
+        Self { config }
+    }
+
     pub fn main(self) -> Result<()> {
         let stream = UnixStream::connect(&self.config.unix_socket)?;
         let mut server_writer = stream.try_clone()?;

@@ -222,42 +222,23 @@ fn rimecmd() -> Result<()> {
         }
         return Ok(());
     }
-    let rime_api = rime_api::RimeApi::new(
-        &config.user_data_directory,
-        "/usr/share/rime-data",
-        args.rime_log_level,
-    );
-    let rime_session = rime_api::RimeSession::new(&rime_api);
     if args.json {
         if args.tty {
             let terminal_interface = terminal_interface::TerminalInterface::new()?;
             TerminalJsonMode::new(config, terminal_interface).main()?;
             return Ok(());
         } else {
-            JsonMode {
-                config,
-                rime_session,
-            }
-            .main()?;
+            JsonMode::new(config).main()?;
             return Ok(());
         };
     }
     let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
     match maybe_terminal_interface {
         Ok(terminal_interface) => {
-            TerminalMode {
-                config,
-                terminal_interface,
-                rime_session,
-            }
-            .main()?;
+            TerminalMode::new(config, terminal_interface).main()?;
         }
         Err(Error::NotATerminal) => {
-            JsonMode {
-                config,
-                rime_session,
-            }
-            .main()?;
+            JsonMode::new(config).main()?;
         }
         err => {
             err?;

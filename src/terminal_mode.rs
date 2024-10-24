@@ -1,20 +1,25 @@
 use crate::json_request_processor::{Outcome, Reply, Request};
 use crate::json_source::JsonSource;
 use crate::poll_data::ReadData;
-use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
 use crate::{Call, Config, Effect, Error};
 use std::io::{stdout, Write};
 use std::os::unix::net::UnixStream;
 use uuid::Uuid;
 
-pub struct TerminalMode<'a> {
-    pub config: Config,
-    pub terminal_interface: TerminalInterface,
-    pub rime_session: RimeSession<'a>,
+pub struct TerminalMode {
+    config: Config,
+    terminal_interface: TerminalInterface,
 }
 
-impl<'a> TerminalMode<'a> {
+impl TerminalMode {
+    pub fn new(config: Config, terminal_interface: TerminalInterface) -> Self {
+        Self {
+            config,
+            terminal_interface,
+        }
+    }
+
     pub fn main(mut self) -> Result<(), Error> {
         match self.main_impl() {
             Ok(()) => Ok(()),
