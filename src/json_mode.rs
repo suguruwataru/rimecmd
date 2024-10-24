@@ -6,16 +6,16 @@ use std::cell::RefCell;
 use std::io::{stdin, stdout, Read, Write};
 use std::rc::Rc;
 
-use crate::client::ServerReply;
+use crate::client::ReplyState;
 use crate::poll_data::{PollData, ReadData};
 
 enum Input {
     StdinBytes(Vec<u8>),
-    ServerReply(ServerReply),
+    ServerReply(ReplyState),
 }
 
-impl From<ServerReply> for Input {
-    fn from(source: ServerReply) -> Self {
+impl From<ReplyState> for Input {
+    fn from(source: ReplyState) -> Self {
         Self::ServerReply(source)
     }
 }
@@ -64,7 +64,7 @@ impl JsonMode {
                 Input::StdinBytes(bytes) => {
                     client.borrow_mut().send_bytes(&bytes)?;
                 }
-                Input::ServerReply(ServerReply::Complete(reply)) => {
+                Input::ServerReply(ReplyState::Complete(reply)) => {
                     stdout().write(&serde_json::to_string(&reply).unwrap().as_bytes())?;
                     stdout().flush()?;
                     match reply {
@@ -85,7 +85,7 @@ impl JsonMode {
                         _ => (),
                     }
                 }
-                Input::ServerReply(ServerReply::Incomplete) => continue,
+                Input::ServerReply(ReplyState::Incomplete) => continue,
             }
         }
         drop(poll_data);

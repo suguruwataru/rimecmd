@@ -1,4 +1,4 @@
-use crate::client::{Client, ServerReply};
+use crate::client::{Client, ReplyState};
 use crate::json_mode::Stdin;
 use crate::json_request_processor::{Outcome, Reply, Request};
 use crate::poll_data::{PollData, ReadData};
@@ -10,7 +10,7 @@ use std::io::{stdin, stdout, Write};
 use std::rc::Rc;
 
 pub enum Input {
-    ServerReply(ServerReply),
+    ServerReply(ReplyState),
     StdinBytes(Vec<u8>),
     TerminalRequest(Request),
 }
@@ -27,8 +27,8 @@ impl From<Request> for Input {
     }
 }
 
-impl From<ServerReply> for Input {
-    fn from(source: ServerReply) -> Self {
+impl From<ReplyState> for Input {
+    fn from(source: ReplyState) -> Self {
         Self::ServerReply(source)
     }
 }
@@ -85,12 +85,12 @@ impl TerminalJsonMode {
                     client.borrow_mut().send_bytes(&bytes)?;
                     continue;
                 }
-                Input::ServerReply(ServerReply::Complete(reply)) => {
+                Input::ServerReply(ReplyState::Complete(reply)) => {
                     stdout().write(&serde_json::to_string(&reply).unwrap().as_bytes())?;
                     stdout().flush()?;
                     reply
                 }
-                Input::ServerReply(ServerReply::Incomplete) => continue,
+                Input::ServerReply(ReplyState::Incomplete) => continue,
             };
             match reply {
                 Reply {

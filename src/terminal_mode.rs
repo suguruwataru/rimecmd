@@ -1,28 +1,26 @@
+use crate::client::{Client, ReplyState};
 use crate::json_request_processor::{Outcome, Reply, Request};
-use crate::json_source::JsonSource;
 use crate::poll_data::ReadData;
 use crate::terminal_interface::TerminalInterface;
-use crate::{Call, Config, Effect, Error};
+use crate::{Call, Effect, Error};
 use std::io::{stdout, Write};
-use std::net::Shutdown;
-use std::os::unix::net::UnixStream;
 use uuid::Uuid;
 
 pub struct TerminalMode {
-    config: Config,
+    client: Client,
     terminal_interface: TerminalInterface,
 }
 
 impl TerminalMode {
-    pub fn new(config: Config, terminal_interface: TerminalInterface) -> Self {
+    pub fn new(client: Client, terminal_interface: TerminalInterface) -> Self {
         Self {
-            config,
+            client,
             terminal_interface,
         }
     }
 
-    pub fn main(mut self) -> Result<(), Error> {
-        match self.main_impl() {
+    pub fn main(mut self, continue_mode: bool) -> Result<(), Error> {
+        match Self::main_impl(self.client, &mut self.terminal_interface, continue_mode) {
             Ok(()) => Ok(()),
             Err(err) => {
                 self.terminal_interface.close()?;
@@ -31,25 +29,27 @@ impl TerminalMode {
         }
     }
 
-    fn main_impl(&mut self) -> Result<(), Error> {
-        self.terminal_interface.open()?;
-        let stream = UnixStream::connect(&self.config.unix_socket)?;
-        let mut json_dest = stream.try_clone()?;
-        let json_source = stream.try_clone()?;
-        let mut json_source = JsonSource::new(json_source);
+    fn main_impl(
+        mut client: Client,
+        terminal_interface: &mut TerminalInterface,
+        continue_mode: bool,
+    ) -> Result<(), Error> {
+        terminal_interface.open()?;
         loop {
-            let call = self.terminal_interface.next_call()?;
+            let call = terminal_interface.next_call()?;
             let reply = match call {
-                call @ Call::ProcessKey { .. } => {
-                    json_dest.write(
+                call @ (Call::ProcessKey { .. } | Call::StopClient) => {
+                    client.send_bytes(
                         serde_json::to_string(&Request {
                             id: Uuid::new_v4().into(),
                             call,
                         })?
                         .as_bytes(),
                     )?;
-                    json_dest.flush()?;
-                    json_source.read_data()?
+                    match client.read_data()? {
+                        ReplyState::Complete(reply) => reply,
+                        ReplyState::Incomplete => continue,
+                    }
                 }
                 _ => unreachable!(),
             };
@@ -58,14 +58,14 @@ impl TerminalMode {
                     outcome: Outcome::Effect(Effect::CommitString(commit_string)),
                     ..
                 } => {
-                    if !self.config.continue_mode {
-                        self.terminal_interface.close()?;
+                    if !continue_mode {
+                        terminal_interface.close()?;
                         writeln!(stdout(), "{}", commit_string)?;
                         break;
                     } else {
-                        self.terminal_interface.remove_ui()?;
+                        terminal_interface.remove_ui()?;
                         writeln!(stdout(), "{}", commit_string)?;
-                        self.terminal_interface.setup_ui()?;
+                        terminal_interface.setup_ui()?;
                     }
                 }
                 Reply {
@@ -76,19 +76,19 @@ impl TerminalMode {
                         }),
                     ..
                 } => {
-                    self.terminal_interface.update_ui(composition, menu)?;
+                    terminal_interface.update_ui(composition, menu)?;
                 }
                 Reply {
                     outcome: Outcome::Effect(Effect::StopClient),
                     ..
                 } => {
-                    stream.shutdown(Shutdown::Both)?;
-                    self.terminal_interface.close()?;
                     break;
                 }
                 _ => (),
             }
         }
+        client.shutdown()?;
+        terminal_interface.close()?;
         Ok(())
     }
 }

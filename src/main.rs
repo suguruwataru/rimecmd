@@ -135,7 +135,6 @@ pub struct Args {
 
 #[derive(Clone, Serialize)]
 pub struct Config {
-    pub continue_mode: bool,
     pub unix_socket: PathBuf,
     pub user_data_directory: PathBuf,
     pub rime_log_level: rime_api::LogLevel,
@@ -156,7 +155,6 @@ impl TryFrom<&Args> for Config {
             .join("rimecmd.sock")
         };
         Ok(Self {
-            continue_mode: args.continue_mode,
             unix_socket,
             user_data_directory: xdg_directories.get_data_home().into(),
             rime_log_level: args.rime_log_level,
@@ -226,7 +224,9 @@ fn rimecmd() -> Result<()> {
     }
     let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
     match maybe_terminal_interface {
-        Ok(terminal_interface) => return TerminalMode::new(config, terminal_interface).main(),
+        Ok(terminal_interface) => {
+            return TerminalMode::new(client, terminal_interface).main(args.continue_mode)
+        }
         Err(Error::NotATerminal) => return JsonMode::new(client).main(args.continue_mode),
         err => {
             err?;

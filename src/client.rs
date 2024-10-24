@@ -10,12 +10,12 @@ pub struct Client {
     json_bytes: Vec<u8>,
 }
 
-pub enum ServerReply {
+pub enum ReplyState {
     Complete(Reply),
     Incomplete,
 }
 
-impl<D: From<ServerReply>> ReadData<D> for Client {
+impl<D: From<ReplyState>> ReadData<D> for Client {
     fn read_data(&mut self) -> Result<D> {
         let mut buf = [0; 1024];
         let count = self.server_stream.read(&mut buf)?;
@@ -23,9 +23,9 @@ impl<D: From<ServerReply>> ReadData<D> for Client {
         match serde_json::from_slice::<Reply>(&self.json_bytes) {
             Ok(reply) => {
                 self.json_bytes.clear();
-                Ok(ServerReply::Complete(reply).into())
+                Ok(ReplyState::Complete(reply).into())
             }
-            Err(err) if err.is_eof() => Ok(ServerReply::Incomplete.into()),
+            Err(err) if err.is_eof() => Ok(ReplyState::Incomplete.into()),
             Err(err) => Err(err.into()),
         }
     }
