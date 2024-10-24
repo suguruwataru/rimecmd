@@ -7,6 +7,11 @@ use std::os::fd::AsRawFd;
 mod input_parser;
 mod input_translator;
 
+enum CharacterAttribute {
+    Normal,
+    Faint,
+}
+
 pub enum Input {
     Up,
     Down,
@@ -77,6 +82,14 @@ impl<'a> TerminalInterface<'a> {
         Ok(result_input?)
     }
 
+    fn set_character_attribute(&mut self, character_attribute: CharacterAttribute) -> Result<()> {
+        match character_attribute {
+            CharacterAttribute::Faint => self.tty_file.write(b"\x1b[2m")?,
+            CharacterAttribute::Normal => self.tty_file.write(b"\x1b[0m")?,
+        };
+        Ok(())
+    }
+
     /// Draw the Rime menu.
     ///
     /// When called, the cursor must be placed where the topleft cell of the menu
@@ -84,6 +97,8 @@ impl<'a> TerminalInterface<'a> {
     /// below (including) the cell is not enough to contain the menu. It expects
     /// the terminal to automatically scroll so that enough lines will emerge from
     /// the bottom of the terminal to contain everything.
+    ///
+    /// This method does not flush the output.
     ///
     /// On success, the height of the drawn menu will be returned. The cursor will
     /// be placed at the end of the last line.
@@ -108,8 +123,9 @@ impl<'a> TerminalInterface<'a> {
                 write!(self.tty_file, "{}. {}", index + 1, candidate.text)?;
             }
             if let Some(comment) = candidate.comment.as_ref() {
-                // The escape code here gives the comment faint color,
-                write!(self.tty_file, " \x1b[2m{}\x1b[0m", comment)?;
+                self.set_character_attribute(CharacterAttribute::Faint)?;
+                write!(self.tty_file, " {}", comment)?;
+                self.set_character_attribute(CharacterAttribute::Normal)?;
             }
             self.erase_line_to_right()?;
             self.tty_file.write(b"\r\n")?;
@@ -118,8 +134,45 @@ impl<'a> TerminalInterface<'a> {
         Ok(height)
     }
 
+    fn save_cursor(&mut self) -> Result<()> {
+        self.tty_file.write(b"\x1b[s")?;
+        Ok(())
+    }
+
+    fn restore_cursor(&mut self) -> Result<()> {
+        self.tty_file.write(b"\x1b[u")?;
+        Ok(())
+    }
+
+    /// Draw the composition, which is what Rime calls the part of UI that includes the edittable
+    /// text.
+    ///
+    /// This uses `save_cursor`, and overwrites whatever the terminal stores for the cursor.
+    ///
+    /// This places the cursor inside the edittable part, wherever Rime considers the cursor
+    /// position is.
     fn draw_composition(&mut self, composition: crate::rime_api::RimeComposition) -> Result<()> {
-        write!(self.tty_file, "> {}", composition.preedit)?;
+        self.tty_file.write(b"> ")?;
+        self.set_character_attribute(CharacterAttribute::Faint)?;
+        let mut cursor_saved = false;
+        for (index, byte) in composition.preedit.as_bytes().iter().enumerate() {
+            if index == composition.sel_start {
+                self.set_character_attribute(CharacterAttribute::Normal)?;
+            }
+            if index == composition.sel_end {
+                self.set_character_attribute(CharacterAttribute::Faint)?;
+            }
+            if index == composition.cursor_pos {
+                cursor_saved = true;
+                self.save_cursor()?;
+            }
+            self.tty_file.write(&[*byte])?;
+        }
+        self.erase_after()?;
+        self.set_character_attribute(CharacterAttribute::Normal)?;
+        if cursor_saved {
+            self.restore_cursor()?;
+        }
         Ok(())
     }
 
@@ -152,7 +205,6 @@ impl<'a> TerminalInterface<'a> {
                             self.carriage_return()?;
                             height = self.draw_menu(menu)?;
                             self.draw_composition(composition)?;
-                            self.erase_after()?;
                             self.tty_file.flush()?;
                         }
                         Action::CommitString(commit_string) => {
@@ -205,11 +257,20 @@ impl<'a> TerminalInterface<'a> {
     }
 
     fn cursor_up(&mut self, times: usize) -> Result<()> {
-        // Cursor up view.height times
         // Only positive integers are accepted, at least in alacritty,
         // so a if is required here.
         if times != 0 {
             write!(self.tty_file, "\x1b[{}A", times)?;
+        }
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn cursor_right(&mut self, times: usize) -> Result<()> {
+        // Only positive integers are accepted, at least in alacritty,
+        // so a if is required here.
+        if times != 0 {
+            write!(self.tty_file, "\x1b[{}C", times)?;
         }
         Ok(())
     }
