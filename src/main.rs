@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use terminal_json_mode::TerminalJsonMode;
 use terminal_mode::TerminalMode;
 mod poll_request;
+use std::sync::{mpsc::channel, Arc, Mutex};
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(
@@ -129,22 +130,31 @@ fn rimecmd() -> Result<()> {
     };
     if args.server {
         let listener = UnixListener::bind(&socket_path).unwrap();
+        let (error_sender, error_receiver) = channel();
+        let error_sender = Arc::new(Mutex::new(error_sender));
+        thread::spawn(move || loop {
+            let _error: Error = error_receiver.recv().unwrap();
+            todo!("implement error logging");
+        });
         for stream in listener.incoming() {
             let stream = stream?;
             let data_home = data_home.clone();
             let args = args.clone();
+            let error_sender = Arc::clone(&error_sender);
             thread::spawn(move || {
                 let rime_api =
                     rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
                 let rime_session = rime_api::RimeSession::new(&rime_api);
-                JsonMode::new(
-                    args,
-                    JsonSource::new(stream.try_clone().unwrap()),
-                    stream,
-                    rime_session,
-                )
-                .main()
-                .unwrap();
+                let input_stream = match stream.try_clone() {
+                    Ok(stream) => stream,
+                    Err(error) => {
+                        error_sender.lock().unwrap().send(error.into()).unwrap();
+                        return ();
+                    }
+                };
+                JsonMode::new(args, JsonSource::new(input_stream), stream, rime_session)
+                    .main()
+                    .unwrap_or_else(|err| error_sender.lock().unwrap().send(err).unwrap());
             });
         }
         return Ok(());
