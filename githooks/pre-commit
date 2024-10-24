@@ -3,6 +3,7 @@ set -x
 set -e
 find src -name '*.c' | xargs clang-check -p build/meson
 find src -name '*.c' | xargs clang-format --dry-run
+meson compile -C build/meson
 export RUSTFLAGS='--deny warnings'
 cargo fmt --check
 cargo test
