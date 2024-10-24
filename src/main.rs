@@ -1,5 +1,7 @@
 mod error;
+mod json_mode;
 mod json_request_processor;
+mod json_stdin;
 mod key_processor;
 #[allow(dead_code)]
 mod rime_api;
@@ -9,10 +11,12 @@ mod terminal_mode;
 use error::Error;
 type Result<T> = std::result::Result<T, Error>;
 
+use json_mode::JsonMode;
+use json_stdin::JsonStdin;
 use rime_api::{RimeComposition, RimeMenu};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use terminal_json_mode::{JsonStdin, TerminalJsonMode};
+use terminal_json_mode::TerminalJsonMode;
 use terminal_mode::TerminalMode;
 mod poll_request;
 
@@ -114,17 +118,24 @@ fn main() -> ExitCode {
         .unwrap();
     let rime_api = rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
     let rime_session = rime_api::RimeSession::new(&rime_api);
-    if args.json && args.tty {
-        let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
+    if args.json {
         let json_stdin = JsonStdin::new();
-        return match maybe_terminal_interface {
-            Ok(terminal_interface) => {
-                TerminalJsonMode::new(args, terminal_interface, json_stdin, rime_session)
-                    .main()
-                    .unwrap();
-                ExitCode::SUCCESS
-            }
-            Err(_) => ExitCode::FAILURE,
+        if args.tty {
+            let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
+            return match maybe_terminal_interface {
+                Ok(terminal_interface) => {
+                    TerminalJsonMode::new(args, terminal_interface, json_stdin, rime_session)
+                        .main()
+                        .unwrap();
+                    ExitCode::SUCCESS
+                }
+                Err(_) => ExitCode::FAILURE,
+            };
+        } else {
+            JsonMode::new(args, json_stdin, rime_session)
+                .main()
+                .unwrap();
+            return ExitCode::SUCCESS;
         };
     }
     let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
@@ -139,7 +150,12 @@ fn main() -> ExitCode {
             .unwrap();
             ExitCode::SUCCESS
         }
-        Err(Error::NotATerminal) => todo!(),
+        Err(Error::NotATerminal) => {
+            JsonMode::new(args, JsonStdin::new(), rime_session)
+                .main()
+                .unwrap();
+            return ExitCode::SUCCESS;
+        }
         Err(_) => ExitCode::FAILURE,
     }
 }
