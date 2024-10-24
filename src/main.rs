@@ -7,6 +7,8 @@ mod rime_api;
 mod stdin_interface;
 mod terminal_interface;
 use error::Error;
+use json_request_processor::Call;
+use key_processor::Action;
 
 #[cfg(test)]
 mod testing_utilities;
@@ -95,20 +97,38 @@ fn main() -> ExitCode {
             }
         }
     } else {
-        let maybe_terminal_interface =
-            terminal_interface::TerminalInterface::new(key_processor::KeyProcessor::new());
+        let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
+        let key_processor = key_processor::KeyProcessor::new();
         match maybe_terminal_interface {
             Ok(mut terminal_interface) => {
+                terminal_interface.open().unwrap();
                 loop {
-                    if let Some(commit_string) =
-                        terminal_interface.process_input(&rime_session).unwrap()
-                    {
-                        writeln!(stdout(), "{}", commit_string).unwrap();
-                        if !args.continue_mode {
+                    let call = terminal_interface.next_call().unwrap();
+                    let action = match call {
+                        Call::ProcessKey { keycode, mask } => {
+                            key_processor.process_key(&rime_session, keycode, mask)
+                        }
+                        Call::Stop => {
+                            terminal_interface.close().unwrap();
                             break;
                         }
-                    } else {
-                        break;
+                        _ => todo!(),
+                    };
+                    match action {
+                        Action::CommitString(commit_string) => {
+                            if !args.continue_mode {
+                                terminal_interface.close().unwrap();
+                                writeln!(std::io::stdout(), "{}", commit_string).unwrap();
+                                break;
+                            } else {
+                                terminal_interface.remove_ui().unwrap();
+                                writeln!(std::io::stdout(), "{}", commit_string).unwrap();
+                                terminal_interface.setup_ui().unwrap();
+                            }
+                        }
+                        Action::UpdateUi { menu, composition } => {
+                            terminal_interface.update_ui(composition, menu).unwrap()
+                        }
                     }
                 }
                 ExitCode::SUCCESS

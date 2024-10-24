@@ -1,3 +1,4 @@
+use crate::json_request_processor::Call;
 /// This module includes that code that interacts with a text terminal
 ///
 /// This module interacts with a terminal using console_codes(4). In
@@ -12,8 +13,7 @@
 /// wrong with. Also, with today's terminals, which generally support a
 /// similar set of codes, and the limited terminal functions this program
 /// uses, `terminfo` hardly makes a difference.
-use crate::key_processor::{Action, KeyProcessor};
-use crate::rime_api::RimeSession;
+use crate::rime_api::{RimeComposition, RimeMenu};
 use std::io::{Read, Write};
 use std::iter::Iterator;
 use std::num::NonZeroUsize;
@@ -59,14 +59,13 @@ pub enum Input {
 pub struct TerminalInterface {
     tty_file: std::fs::File,
     original_mode: Option<libc::termios>,
-    key_processor: KeyProcessor,
     input_translator: input_translator::InputTranslator,
 }
 
 type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
 
 impl TerminalInterface {
-    pub fn new(key_processor: KeyProcessor) -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self {
             tty_file: std::fs::OpenOptions::new()
                 .read(true)
@@ -77,7 +76,6 @@ impl TerminalInterface {
                     _ => crate::Error::External(io_err),
                 })?,
             original_mode: None,
-            key_processor,
             input_translator: input_translator::InputTranslator::new(),
         })
     }
@@ -111,13 +109,15 @@ impl TerminalInterface {
     /// Draw the Rime menu.
     ///
     /// When called, the cursor must be placed where the topleft cell of the menu
-    /// is to be. The function doesn't do anything special if the number of lines
-    /// below (including) the cell is not enough to contain the menu. It expects
-    /// the terminal to automatically scroll so that enough lines will emerge from
-    /// the bottom of the terminal to contain everything.
+    /// is to be. The function doesn't do anything special if the space is not enough
+    /// to contain the menu. It expects the terminal to automatically scroll so that
+    /// enough lines will emerge from the bottom of the terminal to contain everything.
     ///
     /// This method does not flush the output.
-    fn draw_menu(&mut self, menu: crate::rime_api::RimeMenu) -> Result<()> {
+    ///
+    /// On success, return the row to place the cursor, using 1-index.
+    fn draw_menu(&mut self, menu: crate::rime_api::RimeMenu) -> Result<NonZeroUsize> {
+        let mut height = 0;
         for (index, candidate) in menu.candidates.iter().enumerate() {
             self.tty_file.write(b"\r\n")?;
             if index == menu.highlighted_candidate_index {
@@ -137,19 +137,24 @@ impl TerminalInterface {
                 self.set_character_attribute(CharacterAttribute::Normal)?;
             }
             self.erase_line_to_right()?;
+            height = index + 1;
         }
         self.erase_after()?;
-        Ok(())
+        let last_line_row = self.get_cursor_position()?.0;
+        Ok((last_line_row.get() - height)
+            .try_into()
+            .unwrap_or(NonZeroUsize::new(1).unwrap()))
     }
 
     /// Draw the composition, which is what Rime calls the part of UI that includes the edittable
     /// text.
     ///
-    /// On success, return wherever Rime considers the cursor position is.
+    /// On success, return the column to place the cursor, using 1-index, based on wherever Rime
+    /// considers the cursor position is.
     fn draw_composition(
         &mut self,
         composition: crate::rime_api::RimeComposition,
-    ) -> Result<(NonZeroUsize, NonZeroUsize)> {
+    ) -> Result<NonZeroUsize> {
         self.tty_file.write(b"> ")?;
         self.set_character_attribute(CharacterAttribute::Faint)?;
         let mut final_cursor_position = None;
@@ -166,13 +171,16 @@ impl TerminalInterface {
             self.tty_file.write(&[*byte])?;
         }
         self.set_character_attribute(CharacterAttribute::Normal)?;
-        Ok(final_cursor_position.unwrap_or(self.get_cursor_position()?))
+        self.erase_line_to_right()?;
+        Ok(final_cursor_position
+            .unwrap_or(self.get_cursor_position()?)
+            .1)
     }
 
     fn get_cursor_position(&mut self) -> Result<(NonZeroUsize, NonZeroUsize)> {
         self.tty_file.write(b"\x1b[6n")?;
         let Input::CursorPositionReport { row, col } = self.read_input()? else {
-            return Err(crate::Error::UnsupportedInput);
+            todo!()
         };
         Ok((row, col))
     }
@@ -182,45 +190,54 @@ impl TerminalInterface {
         Ok(())
     }
 
-    pub fn process_input(&mut self, rime_session: &RimeSession) -> Result<Option<String>> {
+    pub fn open(&mut self) -> Result<()> {
         self.enter_raw_mode()?;
-        self.erase_line_all()?;
-        self.carriage_return()?;
-        self.erase_after()?;
-        write!(self.tty_file, "> ")?;
-        self.tty_file.flush()?;
-        loop {
-            match self.read_input()? {
-                Input::Etx | Input::Eot => {
-                    self.carriage_return()?;
-                    self.erase_after()?;
-                    self.exit_raw_mode()?;
-                    break Ok(None);
-                }
-                input => {
-                    let Some(input_translator::RimeKey { keycode, mask }) =
-                        self.input_translator.translate_input(input)
-                    else {
-                        break Err(crate::Error::UnsupportedInput);
-                    };
-                    match self.key_processor.process_key(rime_session, keycode, mask) {
-                        Action::UpdateUi { composition, menu } => {
-                            self.carriage_return()?;
-                            let final_cursor_pos = self.draw_composition(composition)?;
-                            self.draw_menu(menu)?;
-                            self.set_cursor_position(final_cursor_pos)?;
-                            self.tty_file.flush()?;
-                        }
-                        Action::CommitString(commit_string) => {
-                            self.carriage_return()?;
-                            self.erase_after()?;
-                            self.exit_raw_mode()?;
-                            break Ok(Some(commit_string));
-                        }
-                    }
-                }
+        self.setup_ui()?;
+        Ok(())
+    }
+
+    pub fn next_call(&mut self) -> Result<Call> {
+        match self.read_input()? {
+            Input::Etx | Input::Eot => Ok(Call::Stop),
+            input => {
+                let Some(input_translator::RimeKey { keycode, mask }) =
+                    self.input_translator.translate_input(input)
+                else {
+                    return Err(crate::Error::UnsupportedInput);
+                };
+                Ok(Call::ProcessKey { keycode, mask })
             }
         }
+    }
+
+    pub fn update_ui(&mut self, composition: RimeComposition, menu: RimeMenu) -> Result<()> {
+        self.carriage_return()?;
+        let final_cursor_col = self.draw_composition(composition)?;
+        let final_cursor_row = self.draw_menu(menu)?;
+        self.set_cursor_position((final_cursor_row, final_cursor_col))?;
+        self.tty_file.flush()?;
+        Ok(())
+    }
+
+    pub fn setup_ui(&mut self) -> Result<()> {
+        self.carriage_return()?;
+        write!(self.tty_file, "> ")?;
+        self.erase_after()?;
+        self.tty_file.flush()?;
+        Ok(())
+    }
+
+    pub fn remove_ui(&mut self) -> Result<()> {
+        self.carriage_return()?;
+        self.erase_after()?;
+        self.tty_file.flush()?;
+        Ok(())
+    }
+
+    pub fn close(&mut self) -> Result<()> {
+        self.remove_ui()?;
+        self.exit_raw_mode()?;
+        Ok(())
     }
 
     fn enter_raw_mode(&mut self) -> Result<()> {
@@ -241,11 +258,6 @@ impl TerminalInterface {
 
     fn carriage_return(&mut self) -> Result<()> {
         self.tty_file.write(b"\r")?;
-        Ok(())
-    }
-
-    fn erase_line_all(&mut self) -> Result<()> {
-        self.tty_file.write(b"\x1b[2K")?;
         Ok(())
     }
 

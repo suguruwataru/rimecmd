@@ -23,6 +23,7 @@ pub struct Request {
 )]
 pub enum Call {
     SchemaName,
+    Stop,
     ProcessKey { keycode: usize, mask: usize },
 }
 
@@ -64,6 +65,7 @@ impl JsonRequestProcessor {
                 id,
                 result: Result::Action(self.key_processor.process_key(rime_session, keycode, mask)),
             },
+            _ => todo!(),
         }
     }
 }
