@@ -36,7 +36,7 @@ fn main() {
         input_bytes: vec![],
         height: 0,
     };
-    for _ in 0..2 {
+    loop {
         let Some((response, byte_vec)) = terminal_interface.next_response() else {
             unimplemented!();
         };
@@ -65,6 +65,13 @@ fn main() {
                         .collect(),
                     height: menu.page_size,
                 }
+            }
+            request_handler::Response::Exit => {
+                terminal_interface.carriage_return().unwrap();
+                terminal_interface.erase_after().unwrap();
+                terminal_interface.flush().unwrap();
+                terminal_interface.exit_raw_mode().unwrap();
+                return;
             }
             _ => unimplemented!(),
         };

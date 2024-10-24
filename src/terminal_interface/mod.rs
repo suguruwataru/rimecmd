@@ -60,6 +60,7 @@ impl<'a> TerminalInterface<'a> {
             input_parser::Input::Char(character) => {
                 Some((self.handle_character(character), byte_vec))
             }
+            input_parser::Input::Etx => Some((Response::Exit, byte_vec)),
             _ => unimplemented!(),
         }
     }
@@ -111,6 +112,11 @@ impl<'a> TerminalInterface<'a> {
 
     pub fn erase_line(&mut self) -> Result<()> {
         self.tty_file.write(b"\x1b[2K")?;
+        Ok(())
+    }
+
+    pub fn erase_after(&mut self) -> Result<()> {
+        self.tty_file.write(b"\x1b[0J")?;
         Ok(())
     }
 

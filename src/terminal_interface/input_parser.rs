@@ -1,7 +1,8 @@
 #[allow(dead_code)]
 pub enum Input {
     Char(char),
-    EscapeCode,
+    Nul,
+    Etx,
 }
 
 enum ParserStateImpl {
@@ -54,6 +55,7 @@ impl ParserStateImpl {
     fn consume_byte(self, byte: u8) -> Self {
         match self {
             ParserStateImpl::Start if byte.is_ascii() => match byte {
+                0x03 => ParserStateImpl::Completed(Input::Etx),
                 0x1b => ParserStateImpl::Esc,
                 _ if byte.is_ascii_control() => unimplemented!(),
                 _ => ParserStateImpl::Completed(Input::Char(char::from(byte))),

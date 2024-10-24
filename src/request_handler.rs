@@ -18,6 +18,7 @@ pub enum Response {
         schema_name: String,
     },
     CharactorNotSupported(char),
+    Exit,
 }
 
 pub struct RequestHandler<'a> {
