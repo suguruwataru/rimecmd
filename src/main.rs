@@ -37,20 +37,22 @@ type Result<T> = std::result::Result<T, Error>;
     deny_unknown_fields
 )]
 pub enum Call {
+    StopClient,
+    StopServer,
     SchemaName,
-    Stop,
     ProcessKey { keycode: usize, mask: usize },
 }
 
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Effect {
+    StopClient,
+    StopServer,
     CommitString(String),
     UpdateUi {
         composition: RimeComposition,
         menu: RimeMenu,
     },
-    Stop,
 }
 
 #[derive(Clone, clap::ValueEnum)]

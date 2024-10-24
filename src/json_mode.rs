@@ -73,13 +73,15 @@ impl JsonMode {
                     server_writer.flush()?;
                 }
                 Bytes::ServerBytes(bytes) => {
-                    if let Reply {
-                        outcome: Outcome::Effect(Effect::Stop),
-                        ..
-                    } = serde_json::from_slice(&bytes)?
-                    {
-                        server_reader.borrow_mut().stream.shutdown(Shutdown::Both)?;
-                        break;
+                    match serde_json::from_slice(&bytes)? {
+                        Reply {
+                            outcome: Outcome::Effect(Effect::StopClient | Effect::StopServer),
+                            ..
+                        } => {
+                            server_reader.borrow_mut().stream.shutdown(Shutdown::Both)?;
+                            break;
+                        }
+                        _ => (),
                     }
                     stdout().write(&bytes)?;
                     stdout().flush()?;

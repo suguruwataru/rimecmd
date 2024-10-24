@@ -77,7 +77,7 @@ impl TerminalMode {
                     self.terminal_interface.update_ui(composition, menu)?;
                 }
                 Reply {
-                    outcome: Outcome::Effect(Effect::Stop),
+                    outcome: Outcome::Effect(Effect::StopClient),
                     ..
                 } => {
                     self.terminal_interface.close()?;

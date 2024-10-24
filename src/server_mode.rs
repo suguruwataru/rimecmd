@@ -24,7 +24,9 @@ impl ServerMode {
     pub fn main(self) -> Result<()> {
         let listener = UnixListener::bind(&self.config.unix_socket).unwrap();
         let (error_sender, error_receiver) = channel();
+        let (stop_sender, stop_receiver) = channel();
         let error_sender = Arc::new(Mutex::new(error_sender));
+        let stop_sender = Arc::new(Mutex::new(stop_sender));
         thread::spawn(move || loop {
             let _error: Error = error_receiver.recv().unwrap();
             todo!("implement error logging");
@@ -34,28 +36,43 @@ impl ServerMode {
             "/usr/share/rime-data",
             self.config.rime_log_level,
         )));
-        for stream in listener.incoming() {
-            let stream = stream?;
-            let error_sender = Arc::clone(&error_sender);
-            let rime_api = Arc::clone(&rime_api);
-            thread::spawn(move || {
-                let rime_session = RimeSession::new(rime_api);
-                let input_stream = match stream.try_clone() {
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                let stream = match stream {
                     Ok(stream) => stream,
-                    Err(error) => {
-                        error_sender.lock().unwrap().send(error.into()).unwrap();
-                        return ();
+                    Err(err) => {
+                        error_sender.lock().unwrap().send(err.into()).unwrap();
+                        break;
                     }
                 };
-                Session {
-                    json_source: JsonSource::new(input_stream),
-                    json_dest: stream,
-                    rime_session,
-                }
-                .run()
-                .unwrap_or_else(|err| error_sender.lock().unwrap().send(err).unwrap());
-            });
-        }
+                let error_sender = Arc::clone(&error_sender);
+                let stop_sender = Arc::clone(&stop_sender);
+                let rime_api = Arc::clone(&rime_api);
+                thread::spawn(move || {
+                    let rime_session = RimeSession::new(rime_api);
+                    let input_stream = match stream.try_clone() {
+                        Ok(stream) => stream,
+                        Err(error) => {
+                            error_sender.lock().unwrap().send(error.into()).unwrap();
+                            return ();
+                        }
+                    };
+                    if (Session {
+                        json_source: JsonSource::new(input_stream),
+                        json_dest: stream,
+                        rime_session,
+                    })
+                    .run()
+                    .unwrap_or_else(|err| {
+                        error_sender.lock().unwrap().send(err).unwrap();
+                        false
+                    }) {
+                        stop_sender.lock().unwrap().send(()).unwrap();
+                    }
+                });
+            }
+        });
+        stop_receiver.recv().unwrap();
         Ok(())
     }
 }
@@ -67,12 +84,13 @@ struct Session {
 }
 
 impl Session {
-    pub fn run(mut self) -> Result<()> {
+    /// On success, return whether the whole server should stop.
+    pub fn run(mut self) -> Result<bool> {
         let json_request_processor = JsonRequestProcessor {
             rime_session: &self.rime_session,
             key_processor: KeyProcessor::new(),
         };
-        loop {
+        let stop_server = loop {
             let request = self.json_source.read_data();
             let reply = match request {
                 Ok(request) => json_request_processor.process_request(request),
@@ -89,16 +107,24 @@ impl Session {
             self.json_dest
                 .write(serde_json::to_string(&reply)?.as_bytes())?;
             self.json_dest.flush()?;
-            if let Reply {
-                outcome: Outcome::Effect(Effect::Stop),
-                ..
-            } = reply
-            {
-                break;
+            match reply {
+                Reply {
+                    outcome: Outcome::Effect(Effect::StopClient),
+                    ..
+                } => {
+                    break false;
+                }
+                Reply {
+                    outcome: Outcome::Effect(Effect::StopServer),
+                    ..
+                } => {
+                    break true;
+                }
+                _ => (),
             }
-        }
+        };
         match self.json_source.read_data() {
-            Err(Error::InputClosed) => Ok(()),
+            Err(Error::InputClosed) => Ok(stop_server),
             Ok(_) => Err(Error::ClientShouldCloseConnection),
             other => other,
         }

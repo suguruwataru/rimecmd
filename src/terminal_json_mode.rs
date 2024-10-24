@@ -124,7 +124,7 @@ impl TerminalJsonMode {
                         .update_ui(composition, menu)?;
                 }
                 Reply {
-                    outcome: Outcome::Effect(Effect::Stop),
+                    outcome: Outcome::Effect(Effect::StopClient),
                     ..
                 } => {
                     writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;

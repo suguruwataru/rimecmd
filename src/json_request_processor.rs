@@ -28,9 +28,9 @@ pub struct Reply {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Outcome {
-    SchemaName(String),
     Effect(Effect),
     Error { code: usize, message: String },
+    SchemaName(String),
 }
 
 impl TryFrom<crate::Error> for Outcome {
@@ -79,9 +79,13 @@ impl JsonRequestProcessor<'_> {
                     mask,
                 )),
             },
-            Call::Stop => Reply {
+            Call::StopClient => Reply {
                 id: Some(id),
-                outcome: Outcome::Effect(Effect::Stop),
+                outcome: Outcome::Effect(Effect::StopClient),
+            },
+            Call::StopServer => Reply {
+                id: Some(id),
+                outcome: Outcome::Effect(Effect::StopServer),
             },
         }
     }

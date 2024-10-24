@@ -230,7 +230,7 @@ impl TerminalInterface {
             None => self.read_input()?,
         };
         match input {
-            Input::Etx | Input::Eot => Ok(Call::Stop),
+            Input::Etx | Input::Eot => Ok(Call::StopClient),
             input => {
                 let Some(input_translator::RimeKey { keycode, mask }) =
                     self.input_translator.translate_input(input)
