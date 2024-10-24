@@ -1,6 +1,6 @@
 use crate::json_request_processor::{Outcome, Reply, Request};
 use crate::json_source::JsonSource;
-use crate::poll_request::ReadJson;
+use crate::poll_data::ReadData;
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
 use crate::{Call, Config, Effect, Error};
@@ -27,26 +27,22 @@ impl<'a> TerminalMode<'a> {
 
     fn main_impl(&mut self) -> Result<(), Error> {
         self.terminal_interface.open()?;
-        let src = UnixStream::connect(&self.config.unix_socket)?;
-        let mut dst = src.try_clone()?;
-        let mut src = JsonSource::new(src);
+        let stream = UnixStream::connect(&self.config.unix_socket)?;
+        let mut json_dest = stream.try_clone()?;
+        let mut json_source = JsonSource::new(stream);
         loop {
             let call = self.terminal_interface.next_call()?;
             let reply = match call {
                 call @ Call::ProcessKey { .. } => {
-                    dst.write(
+                    json_dest.write(
                         serde_json::to_string(&Request {
                             id: Uuid::new_v4().into(),
                             call,
                         })?
                         .as_bytes(),
                     )?;
-                    dst.flush()?;
-                    src.read_json()?
-                }
-                Call::Stop => {
-                    self.terminal_interface.close()?;
-                    break;
+                    json_dest.flush()?;
+                    json_source.read_data()?
                 }
                 _ => unreachable!(),
             };
@@ -74,6 +70,13 @@ impl<'a> TerminalMode<'a> {
                     ..
                 } => {
                     self.terminal_interface.update_ui(composition, menu)?;
+                }
+                Reply {
+                    outcome: Outcome::Effect(Effect::Stop),
+                    ..
+                } => {
+                    self.terminal_interface.close()?;
+                    break;
                 }
                 _ => (),
             }

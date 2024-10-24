@@ -2,6 +2,7 @@
 mod testing_utilities;
 
 mod error;
+mod json_mode;
 mod json_request_processor;
 mod json_source;
 mod key_processor;
@@ -22,7 +23,8 @@ use server_mode::ServerMode;
 use std::path::PathBuf;
 use terminal_json_mode::TerminalJsonMode;
 use terminal_mode::TerminalMode;
-mod poll_request;
+mod poll_data;
+use json_mode::JsonMode;
 use std::sync::{mpsc::channel, Arc, Mutex};
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -46,6 +48,7 @@ pub enum Effect {
         composition: RimeComposition,
         menu: RimeMenu,
     },
+    Stop,
 }
 
 use clap::Parser;
@@ -226,9 +229,8 @@ fn rimecmd() -> Result<()> {
             .main()?;
         }
         Err(Error::NotATerminal) => {
-            ServerMode {
-                json_source: JsonSource::new(std::io::stdin()),
-                json_dest: std::io::stdout(),
+            JsonMode {
+                config,
                 rime_session,
             }
             .main()?;

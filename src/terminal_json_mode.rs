@@ -1,7 +1,7 @@
 use crate::json_request_processor::{JsonRequestProcessor, Outcome, Reply, Request};
 use crate::json_source::JsonSource;
 use crate::key_processor::KeyProcessor;
-use crate::poll_request::{PollRequest, ReadJson};
+use crate::poll_data::{PollData, ReadData};
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
 use crate::Result;
@@ -41,9 +41,9 @@ impl<'a, O: Write> TerminalJsonMode<'a, O> {
             key_processor: KeyProcessor::new(),
         };
         self.terminal_interface.borrow_mut().open()?;
-        let mut poll_request = PollRequest::new(&[
-            Rc::clone(&self.terminal_interface) as Rc<RefCell<dyn ReadJson<Request>>>,
-            Rc::clone(&self.json_source) as Rc<RefCell<dyn ReadJson<Request>>>,
+        let mut poll_request = PollData::new(&[
+            Rc::clone(&self.terminal_interface) as Rc<RefCell<dyn ReadData<Request>>>,
+            Rc::clone(&self.json_source) as Rc<RefCell<dyn ReadData<Request>>>,
         ])?;
         loop {
             let request = poll_request.poll();

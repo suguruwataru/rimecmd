@@ -1,4 +1,4 @@
-use crate::poll_request::{PollRequest, ReadJson};
+use crate::poll_data::{PollData, ReadData};
 use crate::{Error, Result};
 use serde::de::DeserializeOwned;
 use std::io::Read;
@@ -14,12 +14,12 @@ impl<I: Read + AsRawFd> JsonSource<I> {
     }
 }
 
-impl<I: Read + AsRawFd, D: DeserializeOwned> ReadJson<D> for JsonSource<I> {
-    fn register(&self, poll_request: &mut PollRequest<D>) -> Result<()> {
+impl<I: Read + AsRawFd, D: DeserializeOwned> ReadData<D> for JsonSource<I> {
+    fn register(&self, poll_request: &mut PollData<D>) -> Result<()> {
         poll_request.register(&self.src.as_raw_fd())
     }
 
-    fn read_json(&mut self) -> Result<D> {
+    fn read_data(&mut self) -> Result<D> {
         let mut buf = [0u8; 1024];
         let mut json_bytes = vec![];
         loop {

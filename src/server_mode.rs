@@ -1,9 +1,9 @@
-use crate::json_request_processor::{JsonRequestProcessor, Reply, Request};
+use crate::json_request_processor::{JsonRequestProcessor, Outcome, Reply};
 use crate::json_source::JsonSource;
 use crate::key_processor::KeyProcessor;
-use crate::poll_request::ReadJson;
+use crate::poll_data::ReadData;
 use crate::rime_api::RimeSession;
-use crate::Call;
+use crate::Effect;
 use crate::Result;
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
@@ -21,14 +21,8 @@ impl<'a, I: Read + AsRawFd, O: Write> ServerMode<'a, I, O> {
             key_processor: KeyProcessor::new(),
         };
         loop {
-            let request = self.json_source.read_json();
+            let request = self.json_source.read_data();
             let reply = match request {
-                Ok(Request {
-                    id: _,
-                    call: Call::Stop,
-                }) => {
-                    break;
-                }
                 Ok(request) => json_request_processor.process_request(request),
                 Err(err) => match err.try_into() {
                     Ok(err_outcome) => Reply {
@@ -43,6 +37,13 @@ impl<'a, I: Read + AsRawFd, O: Write> ServerMode<'a, I, O> {
             self.json_dest
                 .write(serde_json::to_string(&reply)?.as_bytes())?;
             self.json_dest.flush()?;
+            if let Reply {
+                outcome: Outcome::Effect(Effect::Stop),
+                ..
+            } = reply
+            {
+                break;
+            }
         }
         Ok(())
     }

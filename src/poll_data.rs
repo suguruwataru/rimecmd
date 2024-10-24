@@ -1,25 +1,24 @@
 use crate::{Error, Result};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
-use serde::de::DeserializeOwned;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::os::fd::AsRawFd;
 use std::rc::Rc;
 
-pub trait ReadJson<D: DeserializeOwned> {
-    fn read_json(&mut self) -> Result<D>;
-    fn register(&self, poll_request: &mut PollRequest<D>) -> Result<()>;
+pub trait ReadData<D> {
+    fn read_data(&mut self) -> Result<D>;
+    fn register(&self, poll_data: &mut PollData<D>) -> Result<()>;
 }
 
-pub struct PollRequest<D: DeserializeOwned> {
+pub struct PollData<D> {
     poll: Poll,
     counter: usize,
-    token_source_map: HashMap<usize, Rc<RefCell<dyn ReadJson<D>>>>,
+    token_source_map: HashMap<usize, Rc<RefCell<dyn ReadData<D>>>>,
     result_buffer: Vec<D>,
 }
 
-impl<D: DeserializeOwned> PollRequest<D> {
-    pub fn new(sources: &[Rc<RefCell<dyn ReadJson<D>>>]) -> Result<Self> {
+impl<D> PollData<D> {
+    pub fn new(sources: &[Rc<RefCell<dyn ReadData<D>>>]) -> Result<Self> {
         let mut poll_request = Self {
             poll: Poll::new()?,
             counter: 0,
@@ -47,8 +46,8 @@ impl<D: DeserializeOwned> PollRequest<D> {
 
     pub fn poll(&mut self) -> Result<D> {
         let mut ret = self.result_buffer.pop();
-        if ret.is_some() {
-            return Ok(ret.unwrap());
+        if let Some(ret) = ret {
+            return Ok(ret);
         }
         let mut events = Events::with_capacity(self.counter);
         self.poll.poll(&mut events, None)?;
@@ -58,10 +57,10 @@ impl<D: DeserializeOwned> PollRequest<D> {
             }
             assert!(event.is_readable());
             let source = self.token_source_map.get(&event.token().0).unwrap();
-            let request = source.borrow_mut().read_json()?;
+            let data = source.borrow_mut().read_data()?;
             match ret {
-                None => ret = Some(request),
-                Some(_) => self.result_buffer.push(request),
+                None => ret = Some(data),
+                Some(_) => self.result_buffer.push(data),
             };
         }
         return Ok(ret.unwrap());

@@ -79,7 +79,10 @@ impl JsonRequestProcessor<'_> {
                     mask,
                 )),
             },
-            _ => todo!(),
+            Call::Stop => Reply {
+                id: Some(id),
+                outcome: Outcome::Effect(Effect::Stop),
+            },
         }
     }
 }
