@@ -51,6 +51,7 @@ impl ParserStateImpl {
         match self {
             ParserStateImpl::Start if byte.is_ascii() => match byte {
                 0x03 => ParserStateImpl::Completed(Input::Etx),
+                0x7f => ParserStateImpl::Completed(Input::Del),
                 0x1b => ParserStateImpl::Esc,
                 _ if byte.is_ascii_control() => unimplemented!(),
                 _ => ParserStateImpl::Completed(Input::Char(char::from(byte))),
@@ -77,8 +78,9 @@ impl ParserStateImpl {
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
-    fn ascii_char() {
+    fn ascii_alpha() {
         if let ParserStateImpl::Completed(Input::Char('c')) =
             ParserStateImpl::Start.consume_byte('c' as u8)
         {
@@ -86,6 +88,16 @@ mod test {
             panic!();
         }
     }
+
+    #[test]
+    fn ascii_del() {
+        // The ascii code sent by backspace key
+        if let ParserStateImpl::Completed(Input::Del) = ParserStateImpl::Start.consume_byte(0x7f) {
+        } else {
+            panic!();
+        }
+    }
+
     #[test]
     fn utf8_3_bytes() {
         if let ParserStateImpl::Completed(Input::Char('好')) = "好"

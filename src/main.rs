@@ -42,9 +42,10 @@ fn main() {
         let Some((action, byte_vec)) = terminal_interface.next_response() else {
             unimplemented!();
         };
-        terminal_interface.erase_line().unwrap();
+        terminal_interface.erase_all_line().unwrap();
         terminal_interface.carriage_return().unwrap();
         terminal_interface.cursor_up(view.height).unwrap();
+        terminal_interface.erase_after().unwrap();
         match action {
             terminal_interface::Action::Update(key_processor::Report {
                 commit_text: _,
@@ -58,8 +59,10 @@ fn main() {
                     .for_each(|(index, candidate)| {
                         write!(terminal_interface, "{}. {}\r\n", index + 1, candidate.text,)
                             .unwrap();
+                        terminal_interface.erase_line_to_right().unwrap();
                     });
                 view = View {
+                    // TODO This does not work with backspace.
                     input_bytes: view
                         .input_bytes
                         .into_iter()

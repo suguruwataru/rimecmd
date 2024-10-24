@@ -12,6 +12,7 @@ mod test_input_translator;
 #[allow(dead_code)]
 pub enum Input {
     Char(char),
+    Del,
     Nul,
     Etx,
 }
@@ -127,8 +128,13 @@ impl<'a> TerminalInterface<'a> {
         Ok(())
     }
 
-    pub fn erase_line(&mut self) -> Result<()> {
+    pub fn erase_all_line(&mut self) -> Result<()> {
         self.tty_file.write(b"\x1b[2K")?;
+        Ok(())
+    }
+
+    pub fn erase_line_to_right(&mut self) -> Result<()> {
+        self.tty_file.write(b"\x1b[0K")?;
         Ok(())
     }
 

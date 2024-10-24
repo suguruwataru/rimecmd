@@ -32,3 +32,12 @@ fn test_translate_punct() {
     assert_eq!(result.keycode, 0x21);
     assert_eq!(result.mask, 0);
 }
+
+#[test]
+fn test_translate_del() {
+    let input_translator = InputTranslator::new();
+    let result = input_translator.translate_input(Input::Del).unwrap();
+    // del is the ascii code sent by the backspace key.
+    assert_eq!(result.keycode, 0xff08);
+    assert_eq!(result.mask, 0);
+}

@@ -26,6 +26,10 @@ impl InputTranslator {
         match input {
             Input::Etx => unreachable!(),
             Input::Nul => unimplemented!(),
+            Input::Del => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("BackSpace").unwrap(),
+                mask: 0,
+            }),
             Input::Char(character) => self
                 .rime_character_to_key_name_map
                 .get(&character)
