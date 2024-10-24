@@ -1,4 +1,4 @@
-/// This module includes that code that includes with a text terminal
+/// This module includes that code that interacts with a text terminal
 ///
 /// This module interacts with a terminal using console_codes(4). In
 /// addition, it supports function keys via XTerm codes, as documented on
