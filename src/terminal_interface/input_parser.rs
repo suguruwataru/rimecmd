@@ -5,6 +5,8 @@ enum ParserStateImpl {
     Esc,
     Csi,
     Csi1NumParam(usize),
+    Csi2NumParamPending(usize),
+    Csi2NumParam(usize, usize),
     Completed(Input),
     // Failed could mean unsupported sequence or invalid sequence
     Failed,
@@ -73,6 +75,9 @@ impl ParserStateImpl {
             ParserStateImpl::Csi if byte.is_ascii_digit() => ParserStateImpl::Csi1NumParam(
                 char::from_u32(byte.into()).unwrap().to_digit(10).unwrap() as usize,
             ),
+            ParserStateImpl::Csi1NumParam(param1) if byte == b';' => {
+                ParserStateImpl::Csi2NumParamPending(param1)
+            }
             ParserStateImpl::Csi1NumParam(param1) if byte.is_ascii_digit() => {
                 ParserStateImpl::Csi1NumParam(
                     param1 * 10
@@ -88,6 +93,25 @@ impl ParserStateImpl {
                 6 => ParserStateImpl::Completed(Input::PageDown),
                 _ => ParserStateImpl::Failed,
             },
+            ParserStateImpl::Csi2NumParamPending(param1) if byte.is_ascii_digit() => {
+                ParserStateImpl::Csi2NumParam(
+                    param1,
+                    char::from_u32(byte.into()).unwrap().to_digit(10).unwrap() as usize,
+                )
+            }
+            ParserStateImpl::Csi2NumParam(param1, param2) if byte.is_ascii_digit() => {
+                ParserStateImpl::Csi2NumParam(
+                    param1,
+                    param2 * 10
+                        + char::from_u32(byte.into()).unwrap().to_digit(10).unwrap() as usize,
+                )
+            }
+            ParserStateImpl::Csi2NumParam(param1, param2) if byte == b'R' => {
+                ParserStateImpl::Completed(Input::CursorPositionReport {
+                    row: param1.try_into().unwrap(),
+                    col: param2.try_into().unwrap(),
+                })
+            }
             ParserStateImpl::Start if byte >> 5 == 0b110 => {
                 ParserStateImpl::Pending2ByteUtf8(vec![byte])
             }

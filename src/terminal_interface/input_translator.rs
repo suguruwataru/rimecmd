@@ -27,7 +27,7 @@ impl InputTranslator {
 
     pub fn translate_input(&self, input: Input) -> Option<RimeKey> {
         match input {
-            Input::Etx | Input::Eot => unreachable!(),
+            Input::Etx | Input::Eot | Input::CursorPositionReport { .. } => unreachable!(),
             Input::Lf => Some(RimeKey {
                 keycode: *self.rime_key_name_to_key_code_map.get("Linefeed").unwrap(),
                 mask: 0,

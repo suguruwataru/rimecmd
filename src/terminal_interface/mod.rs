@@ -16,6 +16,7 @@ use crate::key_processor::{Action, KeyProcessor};
 use crate::rime_api::RimeSession;
 use std::io::{Read, Write};
 use std::iter::Iterator;
+use std::num::NonZeroUsize;
 use std::ops::ControlFlow::{Break, Continue};
 use std::os::fd::AsRawFd;
 
@@ -49,6 +50,10 @@ pub enum Input {
     Bs,
     Ht,
     Lf,
+    CursorPositionReport {
+        row: NonZeroUsize,
+        col: NonZeroUsize,
+    },
 }
 
 pub struct TerminalInterface {
@@ -112,12 +117,9 @@ impl TerminalInterface {
     /// the bottom of the terminal to contain everything.
     ///
     /// This method does not flush the output.
-    ///
-    /// On success, the height of the drawn menu will be returned. The cursor will
-    /// be placed at the end of the last line.
-    fn draw_menu(&mut self, menu: crate::rime_api::RimeMenu) -> Result<usize> {
-        let mut height = 0;
+    fn draw_menu(&mut self, menu: crate::rime_api::RimeMenu) -> Result<()> {
         for (index, candidate) in menu.candidates.iter().enumerate() {
+            self.tty_file.write(b"\r\n")?;
             if index == menu.highlighted_candidate_index {
                 // The escape code here gives the index inverted color,
                 write!(
@@ -135,33 +137,22 @@ impl TerminalInterface {
                 self.set_character_attribute(CharacterAttribute::Normal)?;
             }
             self.erase_line_to_right()?;
-            self.tty_file.write(b"\r\n")?;
-            height = index + 1;
         }
-        Ok(height)
-    }
-
-    fn save_cursor(&mut self) -> Result<()> {
-        self.tty_file.write(b"\x1b7")?;
-        Ok(())
-    }
-
-    fn restore_cursor(&mut self) -> Result<()> {
-        self.tty_file.write(b"\x1b8")?;
+        self.erase_after()?;
         Ok(())
     }
 
     /// Draw the composition, which is what Rime calls the part of UI that includes the edittable
     /// text.
     ///
-    /// This uses `save_cursor`, and overwrites whatever the terminal stores for the cursor.
-    ///
-    /// This places the cursor inside the edittable part, wherever Rime considers the cursor
-    /// position is.
-    fn draw_composition(&mut self, composition: crate::rime_api::RimeComposition) -> Result<()> {
+    /// On success, return wherever Rime considers the cursor position is.
+    fn draw_composition(
+        &mut self,
+        composition: crate::rime_api::RimeComposition,
+    ) -> Result<(NonZeroUsize, NonZeroUsize)> {
         self.tty_file.write(b"> ")?;
         self.set_character_attribute(CharacterAttribute::Faint)?;
-        let mut cursor_saved = false;
+        let mut final_cursor_position = None;
         for (index, byte) in composition.preedit.as_bytes().iter().enumerate() {
             if index == composition.sel_start {
                 self.set_character_attribute(CharacterAttribute::Normal)?;
@@ -170,21 +161,28 @@ impl TerminalInterface {
                 self.set_character_attribute(CharacterAttribute::Faint)?;
             }
             if index == composition.cursor_pos {
-                cursor_saved = true;
-                self.save_cursor()?;
+                final_cursor_position = Some(self.get_cursor_position()?)
             }
             self.tty_file.write(&[*byte])?;
         }
-        self.erase_after()?;
-        if cursor_saved {
-            self.restore_cursor()?;
-        }
         self.set_character_attribute(CharacterAttribute::Normal)?;
+        Ok(final_cursor_position.unwrap_or(self.get_cursor_position()?))
+    }
+
+    fn get_cursor_position(&mut self) -> Result<(NonZeroUsize, NonZeroUsize)> {
+        self.tty_file.write(b"\x1b[6n")?;
+        let Input::CursorPositionReport { row, col } = self.read_input()? else {
+            return Err(crate::Error::UnsupportedInput);
+        };
+        Ok((row, col))
+    }
+
+    fn set_cursor_position(&mut self, (row, col): (NonZeroUsize, NonZeroUsize)) -> Result<()> {
+        write!(self.tty_file, "\x1b[{};{}H", row, col)?;
         Ok(())
     }
 
     pub fn process_input(&mut self, rime_session: &RimeSession) -> Result<Option<String>> {
-        let mut height = 0;
         self.enter_raw_mode()?;
         self.erase_line_all()?;
         self.carriage_return()?;
@@ -194,7 +192,6 @@ impl TerminalInterface {
         loop {
             match self.read_input()? {
                 Input::Etx | Input::Eot => {
-                    self.cursor_up(height)?;
                     self.carriage_return()?;
                     self.erase_after()?;
                     self.exit_raw_mode()?;
@@ -208,14 +205,13 @@ impl TerminalInterface {
                     };
                     match self.key_processor.process_key(rime_session, keycode, mask) {
                         Action::UpdateUi { composition, menu } => {
-                            self.cursor_up(height)?;
                             self.carriage_return()?;
-                            height = self.draw_menu(menu)?;
-                            self.draw_composition(composition)?;
+                            let final_cursor_pos = self.draw_composition(composition)?;
+                            self.draw_menu(menu)?;
+                            self.set_cursor_position(final_cursor_pos)?;
                             self.tty_file.flush()?;
                         }
                         Action::CommitString(commit_string) => {
-                            self.cursor_up(height)?;
                             self.carriage_return()?;
                             self.erase_after()?;
                             self.exit_raw_mode()?;
@@ -260,15 +256,6 @@ impl TerminalInterface {
 
     fn erase_after(&mut self) -> Result<()> {
         self.tty_file.write(b"\x1b[0J")?;
-        Ok(())
-    }
-
-    fn cursor_up(&mut self, times: usize) -> Result<()> {
-        // Only positive integers are accepted, at least in alacritty,
-        // so a if is required here.
-        if times != 0 {
-            write!(self.tty_file, "\x1b[{}A", times)?;
-        }
         Ok(())
     }
 
