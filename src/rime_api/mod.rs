@@ -559,6 +559,7 @@ impl RimeApi {
 }
 
 #[derive(Copy, Clone, clap::ValueEnum, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Info,
     Warning,
