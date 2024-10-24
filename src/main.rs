@@ -1,4 +1,5 @@
 mod error;
+#[allow(dead_code)]
 mod json_request_processor;
 mod key_processor;
 #[allow(dead_code)]
@@ -10,8 +11,15 @@ use error::Error;
 mod testing_utilities;
 
 use clap::Parser;
+use schemars::schema_for;
 use std::io::{stdout, Write};
 use std::process::ExitCode;
+
+#[derive(Clone, clap::ValueEnum)]
+enum PrintJsonSchemaFor {
+    Reply,
+    Request,
+}
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -35,26 +43,38 @@ struct Args {
     #[arg(short, long = "continue")]
     /// Do not exit after committing once, instead, continue to process input.
     continue_mode: bool,
+    #[arg(short, long)]
+    /// Print the JSON schema used, then exit.
+    json_schema: Option<PrintJsonSchemaFor>,
 }
 
 fn main() -> ExitCode {
     let args = Args::parse();
+    match args.json_schema {
+        Some(PrintJsonSchemaFor::Request) => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&schema_for!(json_request_processor::Request))
+                    .unwrap()
+            );
+            return ExitCode::SUCCESS;
+        }
+        Some(PrintJsonSchemaFor::Reply) => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&schema_for!(json_request_processor::Reply)).unwrap()
+            );
+            return ExitCode::SUCCESS;
+        }
+        None => (),
+    }
     let data_home = xdg::BaseDirectories::with_prefix("rimecmd")
         .map_err(|err| Error::External(err))
         .map(|xdg_directories| xdg_directories.get_data_home())
         .unwrap();
     let rime_api = rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
     if args.json || args.stdio {
-        match json_request_processor::JsonRequestProcessor::new(rime_api::RimeSession::new(
-            &rime_api,
-        ))
-        .process_request(json_request_processor::Request::SchemaName)
-        {
-            json_request_processor::Reply::SchemaName(schema_name) => {
-                println!("schema name: {}", schema_name);
-                ExitCode::SUCCESS
-            }
-        }
+        todo!()
     } else {
         let maybe_terminal_interface = terminal_interface::TerminalInterface::new(
             key_processor::KeyProcessor::new(rime_api::RimeSession::new(&rime_api)),
