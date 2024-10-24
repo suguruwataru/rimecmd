@@ -45,7 +45,14 @@ pub enum Call {
     StopClient,
     StopServer,
     SchemaName,
-    ProcessKey { keycode: usize, mask: usize },
+    ConfigValueInteger {
+        config_id: String,
+        option_key: String,
+    },
+    ProcessKey {
+        keycode: usize,
+        mask: usize,
+    },
 }
 
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]

@@ -1,5 +1,5 @@
 pub mod key_mappings;
-use crate::Error;
+use crate::{Error, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
@@ -83,7 +83,6 @@ extern "C" {
         rime_api: *mut CRimeApi,
         iterator: *mut CRimeCandidateListIterator,
     ) -> c_void;
-    #[allow(dead_code)]
     fn RimeConfigOpen(config_id: *const c_char, config: *mut RimeConfig) -> c_int;
     fn RimeConfigClose(config: *mut RimeConfig) -> c_int;
     fn RimeConfigGetInt(config: *mut RimeConfig, key: *const c_char, value: *mut c_int) -> c_int;
@@ -96,7 +95,7 @@ pub struct RimeConfig {
 
 pub trait RimeConfigValue
 where
-    Self: Sized,
+    Self: Sized + Serialize,
 {
     fn load(config: &mut RimeConfig, key: impl AsRef<str>) -> Option<Self>;
 }
@@ -113,7 +112,6 @@ impl RimeConfigValue for isize {
     }
 }
 
-#[allow(dead_code)]
 impl RimeConfig {
     pub fn get<V: RimeConfigValue>(&mut self, key: impl AsRef<str>) -> Option<V> {
         V::load(self, key)
@@ -349,7 +347,7 @@ fn rime_schema_from_c(c_rime_schema_item: &CRimeSchemaListItem) -> RimeSchema {
     }
 }
 
-fn c_string_from_path(path: &std::path::Path) -> Result<std::ffi::CString, Error> {
+fn c_string_from_path(path: &std::path::Path) -> Result<std::ffi::CString> {
     path.to_str()
         .ok_or(Error::NonUtf8DataHomePath)
         .and_then(|data_home_str| {
@@ -368,6 +366,21 @@ impl RimeSession {
         let session_id = unsafe { c_create_session(lock.c_rime_api) };
         drop(lock);
         Self { session_id, api }
+    }
+
+    pub fn get_config_value<V: RimeConfigValue>(
+        &self,
+        config_id: impl AsRef<str>,
+        option_key: impl AsRef<str>,
+    ) -> Result<V> {
+        let lock = self.api.lock().unwrap();
+        let Some(mut config) = lock.open_config(config_id.as_ref()) else {
+            return Err(Error::ConfigNotFound(config_id.as_ref().into()));
+        };
+        let Some(option_value) = config.get(option_key.as_ref()) else {
+            return Err(Error::OptionNotFound(option_key.as_ref().into()));
+        };
+        Ok(option_value)
     }
 
     pub fn process_key(&self, keycode: usize, mask: usize) -> bool {

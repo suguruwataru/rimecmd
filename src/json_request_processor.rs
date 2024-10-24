@@ -31,6 +31,7 @@ pub enum Outcome {
     Effect(Effect),
     Error { id: ErrorId, message: String },
     SchemaName(String),
+    ConfigValueInteger(isize),
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -40,6 +41,8 @@ pub enum ErrorId {
     MoreThanOneClient,
     JsonError,
     IoError,
+    OptionNotFound,
+    ConfigNotFound,
 }
 
 impl TryFrom<crate::Error> for Outcome {
@@ -55,6 +58,14 @@ impl TryFrom<crate::Error> for Outcome {
             MoreThanOneClient => Ok(Outcome::Error {
                 id: ErrorId::MoreThanOneClient,
                 message: format!("{:?}", MoreThanOneClient),
+            }),
+            err @ ConfigNotFound(_) => Ok(Outcome::Error {
+                id: ErrorId::ConfigNotFound,
+                message: format!("{:?}", err),
+            }),
+            err @ OptionNotFound(_) => Ok(Outcome::Error {
+                id: ErrorId::OptionNotFound,
+                message: format!("{:?}", err),
             }),
             Json(json_error) => Ok(Outcome::Error {
                 id: ErrorId::JsonError,
@@ -77,6 +88,16 @@ pub struct JsonRequestProcessor<'a> {
 impl JsonRequestProcessor<'_> {
     pub fn process_request(&self, Request { id, call: method }: Request) -> Reply {
         match method {
+            Call::ConfigValueInteger {
+                config_id,
+                option_key,
+            } => Reply {
+                id: Some(id),
+                outcome: match self.rime_session.get_config_value(config_id, option_key) {
+                    Ok(value) => Outcome::ConfigValueInteger(value),
+                    Err(err) => err.try_into().unwrap(),
+                },
+            },
             Call::SchemaName => {
                 let status = self.rime_session.get_status();
                 Reply {

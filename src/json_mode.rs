@@ -1,13 +1,12 @@
 use crate::client::Client;
+use crate::client::ReplyState;
 use crate::json_request_processor::{Outcome, Reply};
+use crate::poll_data::{PollData, ReadData};
 use crate::Effect;
 use crate::Result;
 use std::cell::RefCell;
 use std::io::{stdin, stdout, Read, Write};
 use std::rc::Rc;
-
-use crate::client::ReplyState;
-use crate::poll_data::{PollData, ReadData};
 
 enum Input {
     StdinBytes(Vec<u8>),

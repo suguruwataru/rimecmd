@@ -6,6 +6,8 @@ pub enum Error {
     MoreThanOneClient,
     ServerClosedConnection,
     UnixSocketAlreadyExists,
+    ConfigNotFound(String),
+    OptionNotFound(String),
     InputClosed,
     Io(std::io::Error),
     Json(serde_json::Error),
@@ -34,6 +36,12 @@ impl From<xdg::BaseDirectoriesError> for crate::Error {
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Error::ConfigNotFound(config_name) => {
+                write!(f, "the config {} is not found", config_name)
+            }
+            Error::OptionNotFound(option_name) => {
+                write!(f, "the config option {} is not found", option_name,)
+            }
             Error::NonUtf8DataHomePath => write!(
                 f,
                 "data directory path with non-UTF-8 characters is not supported"
