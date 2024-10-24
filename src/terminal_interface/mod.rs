@@ -13,6 +13,7 @@
 /// similar set of codes, and the limited terminal functions this program
 /// uses, `terminfo` hardly makes a difference.
 use crate::key_processor::{Action, KeyProcessor};
+use crate::rime_api::RimeSession;
 use std::io::{Read, Write};
 use std::iter::Iterator;
 use std::ops::ControlFlow::{Break, Continue};
@@ -50,17 +51,17 @@ pub enum Input {
     Lf,
 }
 
-pub struct TerminalInterface<'a> {
+pub struct TerminalInterface {
     tty_file: std::fs::File,
     original_mode: Option<libc::termios>,
-    key_processor: KeyProcessor<'a>,
+    key_processor: KeyProcessor,
     input_translator: input_translator::InputTranslator,
 }
 
 type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
 
-impl<'a> TerminalInterface<'a> {
-    pub fn new(key_processor: KeyProcessor<'a>) -> Result<Self> {
+impl TerminalInterface {
+    pub fn new(key_processor: KeyProcessor) -> Result<Self> {
         Ok(Self {
             tty_file: std::fs::OpenOptions::new()
                 .read(true)
@@ -116,13 +117,7 @@ impl<'a> TerminalInterface<'a> {
     /// be placed at the end of the last line.
     fn draw_menu(&mut self, menu: crate::rime_api::RimeMenu) -> Result<usize> {
         let mut height = 0;
-        for (index, candidate) in menu
-            .candidates
-            .iter()
-            .skip(menu.page_size * menu.page_no)
-            .take(menu.page_size)
-            .enumerate()
-        {
+        for (index, candidate) in menu.candidates.iter().enumerate() {
             if index == menu.highlighted_candidate_index {
                 // The escape code here gives the index inverted color,
                 write!(
@@ -188,7 +183,7 @@ impl<'a> TerminalInterface<'a> {
         Ok(())
     }
 
-    pub fn process_input(&mut self) -> Result<Option<String>> {
+    pub fn process_input(&mut self, rime_session: &RimeSession) -> Result<Option<String>> {
         let mut height = 0;
         self.enter_raw_mode()?;
         self.erase_line_all()?;
@@ -211,7 +206,7 @@ impl<'a> TerminalInterface<'a> {
                     else {
                         break Err(crate::Error::UnsupportedInput);
                     };
-                    match self.key_processor.process_key(keycode, mask) {
+                    match self.key_processor.process_key(rime_session, keycode, mask) {
                         Action::UpdateUi { composition, menu } => {
                             self.cursor_up(height)?;
                             self.carriage_return()?;

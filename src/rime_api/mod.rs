@@ -1,5 +1,7 @@
 pub mod key_mappings;
 use crate::Error;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::Once;
 
@@ -113,7 +115,8 @@ struct CRimecmdRimeComposition {
     preedit: *mut c_char,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct RimeComposition {
     pub length: usize,
     pub cursor_pos: usize,
@@ -148,16 +151,17 @@ struct CRimecmdRimeContext {
     commit_text_preview: *mut c_char,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct RimeCandidate {
     pub text: String,
     pub comment: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct RimeMenu {
     pub candidates: Vec<RimeCandidate>,
-    pub page_size: usize,
     pub page_no: usize,
     pub highlighted_candidate_index: usize,
     pub is_last_page: bool,
@@ -192,7 +196,6 @@ fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize, menu: &CRimeMenu)
         c_candidate_list_begin(c_rime_api, session_id, &mut iterator);
     }
     RimeMenu {
-        page_size: menu.page_size as usize,
         page_no: menu.page_no as usize,
         is_last_page: menu.is_last_page == 1,
         highlighted_candidate_index: menu.highlighted_candidate_index as usize,
@@ -204,6 +207,8 @@ fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize, menu: &CRimeMenu)
                 None
             }
         })
+        .skip((menu.page_size * menu.page_no) as usize)
+        .take(menu.page_size as usize)
         .collect(),
     }
 }

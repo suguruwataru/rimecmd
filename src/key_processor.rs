@@ -1,5 +1,14 @@
 use crate::rime_api::{RimeComposition, RimeMenu, RimeSession};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(
+    rename_all = "snake_case",
+    tag = "action",
+    content = "params",
+    deny_unknown_fields
+)]
 pub enum Action {
     CommitString(String),
     UpdateUi {
@@ -8,21 +17,19 @@ pub enum Action {
     },
 }
 
-pub struct KeyProcessor<'a> {
-    rime_session: RimeSession<'a>,
-}
+pub struct KeyProcessor;
 
-impl<'a> KeyProcessor<'a> {
-    pub fn new(rime_session: RimeSession<'a>) -> Self {
-        Self { rime_session }
+impl KeyProcessor {
+    pub fn new() -> Self {
+        Self
     }
 
-    pub fn process_key(&self, keycode: usize, mask: usize) -> Action {
-        self.rime_session.process_key(keycode, mask);
-        if let Some(commit_string) = self.rime_session.get_commit().text {
+    pub fn process_key(&self, rime_session: &RimeSession, keycode: usize, mask: usize) -> Action {
+        rime_session.process_key(keycode, mask);
+        if let Some(commit_string) = rime_session.get_commit().text {
             Action::CommitString(commit_string)
         } else {
-            let context = self.rime_session.get_context();
+            let context = rime_session.get_context();
             Action::UpdateUi {
                 composition: context.composition,
                 menu: context.menu,
@@ -45,40 +52,44 @@ mod test {
             LOG_LEVEL,
         );
         let rime_session = crate::rime_api::RimeSession::new(&rime_api);
-        let key_processor = KeyProcessor::new(rime_session);
-        let report = key_processor.process_key(109 /* m */, 0);
+        let key_processor = KeyProcessor::new();
+        let report = key_processor.process_key(&rime_session, 109 /* m */, 0);
         assert_eq!(
             match report {
-                Action::UpdateUi { composition, menu } => (composition.preedit, menu.page_size),
+                Action::UpdateUi { composition, menu } =>
+                    (composition.preedit, menu.candidates.len()),
                 _ => panic!(),
             },
             ("m".into(), 5),
         );
-        let report = key_processor.process_key(73 /* I */, 0);
+        let report = key_processor.process_key(&rime_session, 73 /* I */, 0);
         assert_eq!(
             match report {
-                Action::UpdateUi { composition, menu } => (composition.preedit, menu.page_size),
+                Action::UpdateUi { composition, menu } =>
+                    (composition.preedit, menu.candidates.len()),
                 _ => panic!(),
             },
             ("骂I".into(), 0),
         );
-        let response = key_processor.process_key(78 /* N */, 0);
+        let response = key_processor.process_key(&rime_session, 78 /* N */, 0);
         assert_eq!(
             match response {
-                Action::UpdateUi { composition, menu } => (composition.preedit, menu.page_size),
+                Action::UpdateUi { composition, menu } =>
+                    (composition.preedit, menu.candidates.len()),
                 _ => panic!(),
             },
             ("骂IN".into(), 0),
         );
-        let report = key_processor.process_key(89 /* Y */, 0);
+        let report = key_processor.process_key(&rime_session, 89 /* Y */, 0);
         assert_eq!(
             match report {
-                Action::UpdateUi { composition, menu } => (composition.preedit, menu.page_size),
+                Action::UpdateUi { composition, menu } =>
+                    (composition.preedit, menu.candidates.len()),
                 _ => panic!(),
             },
             ("骂INY".into(), 0),
         );
-        let report = key_processor.process_key(32 /* space */, 0);
+        let report = key_processor.process_key(&rime_session, 32 /* space */, 0);
         assert_eq!(
             match report {
                 Action::CommitString(commit_string) => commit_string,

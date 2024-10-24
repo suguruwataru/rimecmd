@@ -33,14 +33,17 @@ struct Args {
     #[arg(long)]
     /// Use JSON for input/output.
     ///
-    /// When not indicated otherwise, stdio is used.
+    /// stdin and stdout is used, and input/output using the terminal is turned
+    /// off.
     json: bool,
-    /// Interact through stdio instead of the terminal
-    ///
-    /// This is the default when not run from a terminal.
-    /// Implies --json.
     #[arg(long)]
-    stdio: bool,
+    /// Use the terminal for interaction.
+    ///
+    /// This is the default behavior when this program is run on a terminal.
+    /// However, when JSON IO is used, by default, terminal IO will be turned
+    /// off. This switch lets this program also use terminal IO even in this
+    /// case.
+    tty: bool,
     #[arg(short, long = "continue")]
     /// Do not exit after committing once, instead, continue to process input.
     continue_mode: bool,
@@ -74,17 +77,16 @@ fn main() -> ExitCode {
         .map(|xdg_directories| xdg_directories.get_data_home())
         .unwrap();
     let rime_api = rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
-    if args.json || args.stdio {
+    let rime_session = rime_api::RimeSession::new(&rime_api);
+    if args.json {
         if args.continue_mode {
             todo!("conflicting args")
         }
         loop {
             match stdin_interface::StdinInterface::new(
-                json_request_processor::JsonRequestProcessor::new(rime_api::RimeSession::new(
-                    &rime_api,
-                )),
+                json_request_processor::JsonRequestProcessor::new(),
             )
-            .process_input()
+            .process_input(&rime_session)
             {
                 Ok(reply) => {
                     writeln!(stdout(), "{}", serde_json::to_string(&reply).unwrap()).unwrap();
@@ -93,13 +95,14 @@ fn main() -> ExitCode {
             }
         }
     } else {
-        let maybe_terminal_interface = terminal_interface::TerminalInterface::new(
-            key_processor::KeyProcessor::new(rime_api::RimeSession::new(&rime_api)),
-        );
+        let maybe_terminal_interface =
+            terminal_interface::TerminalInterface::new(key_processor::KeyProcessor::new());
         match maybe_terminal_interface {
             Ok(mut terminal_interface) => {
                 loop {
-                    if let Some(commit_string) = terminal_interface.process_input().unwrap() {
+                    if let Some(commit_string) =
+                        terminal_interface.process_input(&rime_session).unwrap()
+                    {
                         writeln!(stdout(), "{}", commit_string).unwrap();
                         if !args.continue_mode {
                             break;
