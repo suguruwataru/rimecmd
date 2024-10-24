@@ -77,6 +77,47 @@ impl<'a> TerminalInterface<'a> {
         Ok(result_input?)
     }
 
+    /// Draw the Rime menu.
+    ///
+    /// When called, the cursor must be placed where the topleft cell of the menu
+    /// is to be. The function doesn't do anything special if the number of lines
+    /// below (including) the cell is not enough to contain the menu. It expects
+    /// the terminal to automatically scroll so that enough lines will emerge from
+    /// the bottom of the terminal to contain everything.
+    ///
+    /// On success, the height of the drawn menu will be returned. The cursor will
+    /// be placed at the end of the last line.
+    fn draw_menu(&mut self, menu: crate::rime_api::RimeMenu) -> Result<usize> {
+        let mut height = 0;
+        for (index, candidate) in menu
+            .candidates
+            .iter()
+            .skip(menu.page_size * menu.page_no)
+            .take(menu.page_size)
+            .enumerate()
+        {
+            if index == menu.highlighted_candidate_index {
+                // The escape code here gives the index inverted color,
+                write!(
+                    self.tty_file,
+                    "\x1b[7m{}.\x1b[0m {}",
+                    index + 1,
+                    candidate.text
+                )?;
+            } else {
+                write!(self.tty_file, "{}. {}", index + 1, candidate.text)?;
+            }
+            if let Some(comment) = candidate.comment.as_ref() {
+                // The escape code here gives the comment faint color,
+                write!(self.tty_file, " \x1b[2m{}\x1b[0m", comment)?;
+            }
+            self.erase_line_to_right()?;
+            self.tty_file.write(b"\r\n")?;
+            height = index + 1;
+        }
+        Ok(height)
+    }
+
     pub fn process_input(&mut self) -> Result<Option<String>> {
         let mut height = 0;
         self.enter_raw_mode()?;
@@ -103,29 +144,8 @@ impl<'a> TerminalInterface<'a> {
                     match self.key_processor.process_key(keycode, mask) {
                         Action::UpdateUi { preedit, menu } => {
                             self.cursor_up(height)?;
-                            height = menu.page_size;
                             self.carriage_return()?;
-                            for (index, candidate) in
-                                menu.candidates.iter().take(menu.page_size).enumerate()
-                            {
-                                if index == menu.highlighted_candidate_index {
-                                    // The escape code here gives the index inverted color,
-                                    write!(
-                                        self.tty_file,
-                                        "\x1b[7m{}.\x1b[0m {}",
-                                        index + 1,
-                                        candidate.text
-                                    )?;
-                                } else {
-                                    write!(self.tty_file, "{}. {}", index + 1, candidate.text)?;
-                                }
-                                if let Some(comment) = candidate.comment.as_ref() {
-                                    // The escape code here gives the comment faint color,
-                                    write!(self.tty_file, " \x1b[2m{}\x1b[0m", comment)?;
-                                }
-                                self.erase_line_to_right()?;
-                                self.tty_file.write(b"\r\n")?;
-                            }
+                            height = self.draw_menu(menu)?;
                             write!(self.tty_file, "> {}", preedit)?;
                             self.erase_after()?;
                             self.tty_file.flush()?;
