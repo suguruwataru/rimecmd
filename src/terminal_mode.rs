@@ -58,14 +58,13 @@ impl TerminalMode {
                     outcome: Outcome::Effect(Effect::CommitString(commit_string)),
                     ..
                 } => {
-                    if !continue_mode {
-                        terminal_interface.remove_ui()?;
-                        writeln!(stdout(), "{}", commit_string)?;
-                        break;
-                    } else {
-                        terminal_interface.remove_ui()?;
-                        writeln!(stdout(), "{}", commit_string)?;
+                    terminal_interface.remove_ui()?;
+                    stdout().write(commit_string.as_bytes())?;
+                    stdout().flush()?;
+                    if continue_mode {
                         terminal_interface.setup_ui()?;
+                    } else {
+                        break;
                     }
                 }
                 Reply {
@@ -82,20 +81,16 @@ impl TerminalMode {
                     else {
                         continue;
                     };
-                    if !continue_mode {
-                        terminal_interface.remove_ui()?;
-                        if let Some(commit_string) = accompanying_commit_string {
-                            write!(stdout(), "{}", commit_string)?;
-                        }
-                        writeln!(stdout(), "{}", c.to_string())?;
-                        break;
-                    } else {
-                        terminal_interface.remove_ui()?;
-                        if let Some(commit_string) = accompanying_commit_string {
-                            write!(stdout(), "{}", commit_string)?;
-                        }
-                        writeln!(stdout(), "{}", c.to_string())?;
+                    terminal_interface.remove_ui()?;
+                    if let Some(commit_string) = accompanying_commit_string {
+                        stdout().write(commit_string.as_bytes())?;
+                    }
+                    stdout().write(c.to_string().as_bytes())?;
+                    stdout().flush()?;
+                    if continue_mode {
                         terminal_interface.setup_ui()?;
+                    } else {
+                        break;
                     }
                 }
                 Reply {
