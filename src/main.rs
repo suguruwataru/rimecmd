@@ -115,10 +115,13 @@ pub struct Args {
     ///
     /// When Rime, on which `rimecmd` is based, runs, it manipulates data in the
     /// user data directory (see `--print-confg`). It is not a good idea to
-    /// have multiple process mutate the same piece of data. As a result, `rimecmd`
+    /// have multiple processes mutate the same piece of data. As a result, `rimecmd`
     /// is based on a client-server architecture. Only the server accesses the Rime
     /// API which mutates the data, and only one instance of server runs at a time.
     /// Clients connect to the server to communicate with Rime.
+    ///
+    /// Normally, a user won't need to use this flag. When a client runs, if it can't
+    /// find a server to connect to, it automatically starts the server.
     server: bool,
     /// Print the configuration used by `rimecmd`.
     ///

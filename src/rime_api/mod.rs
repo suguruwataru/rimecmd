@@ -620,6 +620,7 @@ impl RimeApi {
         return return_value;
     }
 
+    #[allow(dead_code)]
     pub fn get_shared_data_dir(&self) -> std::path::PathBuf {
         std::path::PathBuf::from(
             unsafe { std::ffi::CStr::from_ptr(c_get_shared_data_dir(self.c_rime_api)) }
@@ -628,6 +629,7 @@ impl RimeApi {
         )
     }
 
+    #[allow(dead_code)]
     pub fn get_user_data_dir(&self) -> std::path::PathBuf {
         std::path::PathBuf::from(
             unsafe { std::ffi::CStr::from_ptr(c_get_user_data_dir(self.c_rime_api)) }
