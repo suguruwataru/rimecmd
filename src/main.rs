@@ -76,6 +76,11 @@ enum PrintJsonSchemaFor {
 #[derive(Parser)]
 #[command(version, about)]
 pub struct Args {
+    /// A path to the file where the server's stderr gets redirected to.
+    ///
+    /// Ignored unless `--force-restart-server` is used.
+    #[arg(short, long = "redirect-server-stderr")]
+    redirect_server_stderr: Option<PathBuf>,
     #[arg(long, value_enum, default_value = "none")]
     /// The lowest level of Rime logs to write to stderr.
     ///
@@ -123,7 +128,7 @@ pub struct Args {
     /// Normally, a user won't need to use this flag. When a client runs, if it can't
     /// find a server to connect to, it automatically starts the server.
     server: bool,
-    /// Print the configuration used by `rimecmd`.
+    /// Print the configuration used by `rimecmd` and exit.
     ///
     /// The output is in JSON format.
     #[arg(long)]
@@ -201,12 +206,20 @@ fn print_json_schema(json_schema: PrintJsonSchemaFor) -> Result<()> {
     Ok(())
 }
 
-fn start_server() -> Result<()> {
+fn start_server(log_path: Option<PathBuf>) -> Result<()> {
+    let log_path = match log_path {
+        Some(path) => std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?
+            .into(),
+        None => Stdio::null(),
+    };
     Command::new(std::env::args().nth(0).unwrap())
         .arg("--server")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(log_path)
         .spawn()?;
     Ok(())
 }
@@ -236,13 +249,13 @@ fn rimecmd() -> Result<()> {
         return ServerMode::new(config, unix_listener).main();
     } else if args.force_start_server {
         remove_file(&config.unix_socket).unwrap_or(());
-        return start_server();
+        return start_server(args.redirect_server_stderr);
     }
     let server_stream = match UnixStream::connect(&config.unix_socket) {
         Ok(server_stream) => server_stream,
         Err(error) => match error.kind() {
             ErrorKind::NotFound => {
-                start_server()?;
+                start_server(args.redirect_server_stderr)?;
                 loop {
                     match UnixStream::connect(&config.unix_socket) {
                         Ok(server_stream) => break server_stream,
