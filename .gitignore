@@ -1,5 +1,4 @@
 /.cache
-/meson_build
+/build
 /test_user_data_home
 /temporary_test_directories
-/cargo_build

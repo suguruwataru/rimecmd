@@ -1,2 +1,2 @@
 CompileFlags:
-  CompilationDatabase: meson_build
+  CompilationDatabase: build/meson
