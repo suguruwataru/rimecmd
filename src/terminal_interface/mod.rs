@@ -176,10 +176,10 @@ impl TerminalInterface {
             self.tty_file.write(&[*byte])?;
         }
         self.erase_after()?;
-        self.set_character_attribute(CharacterAttribute::Normal)?;
         if cursor_saved {
             self.restore_cursor()?;
         }
+        self.set_character_attribute(CharacterAttribute::Normal)?;
         Ok(())
     }
 
