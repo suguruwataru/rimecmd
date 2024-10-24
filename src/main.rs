@@ -41,20 +41,27 @@ fn main() {
         preedit: "".into(),
         height: 0,
     };
+    terminal_interface.erase_line_all().unwrap();
+    terminal_interface.carriage_return().unwrap();
+    terminal_interface.cursor_up(view.height).unwrap();
+    terminal_interface.erase_after().unwrap();
+    write!(terminal_interface, "> {}", view.preedit).unwrap();
     loop {
         let Some(action) = terminal_interface.next_response() else {
             unimplemented!();
         };
-        terminal_interface.erase_all_line().unwrap();
+        terminal_interface.erase_line_all().unwrap();
         terminal_interface.carriage_return().unwrap();
         terminal_interface.cursor_up(view.height).unwrap();
         terminal_interface.erase_after().unwrap();
         match action {
-            terminal_interface::Action::Update(key_processor::Report {
-                commit_text: _,
-                preedit,
-                menu,
-            }) => {
+            terminal_interface::Action::CommitString(commit_string) => {
+                terminal_interface.flush().unwrap();
+                terminal_interface.exit_raw_mode().unwrap();
+                write!(std::io::stdout(), "{}\n", commit_string).unwrap();
+                return;
+            }
+            terminal_interface::Action::UpdateUi { preedit, menu } => {
                 menu.candidates
                     .iter()
                     .take(menu.page_size)
@@ -67,23 +74,15 @@ fn main() {
                 view = View {
                     preedit,
                     height: menu.page_size,
-                }
+                };
+                write!(terminal_interface, "> {}", view.preedit).unwrap();
+                terminal_interface.flush().unwrap();
             }
             terminal_interface::Action::Exit => {
-                terminal_interface.carriage_return().unwrap();
-                terminal_interface.erase_after().unwrap();
                 terminal_interface.flush().unwrap();
                 terminal_interface.exit_raw_mode().unwrap();
                 return;
             }
         };
-        write!(terminal_interface, "> {}", view.preedit).unwrap();
-    }
-    #[allow(unreachable_code)]
-    {
-        terminal_interface.carriage_return().unwrap();
-        terminal_interface.write(b"\n").unwrap();
-        terminal_interface.flush().unwrap();
-        terminal_interface.exit_raw_mode().unwrap();
     }
 }

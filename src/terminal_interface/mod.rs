@@ -1,4 +1,4 @@
-use crate::key_processor::{KeyProcessor, Report};
+use crate::key_processor::{Instruction, KeyProcessor};
 use std::io::{Read, Write};
 use std::iter::Iterator;
 use std::os::fd::AsRawFd;
@@ -24,9 +24,24 @@ pub struct TerminalInterface<'a> {
     input_translator: input_translator::InputTranslator,
 }
 
+// TODO Remove this enum. Actions can be directly done in
+// terminal_interface.
 pub enum Action {
-    Update(Report),
+    UpdateUi {
+        preedit: String,
+        menu: crate::rime_api::RimeMenu,
+    },
+    CommitString(String),
     Exit,
+}
+
+impl From<Instruction> for Action {
+    fn from(instruction: crate::key_processor::Instruction) -> Self {
+        match instruction {
+            Instruction::UpdateUi { preedit, menu } => Self::UpdateUi { preedit, menu },
+            Instruction::CommitString(commit_string) => Self::CommitString(commit_string),
+        }
+    }
 }
 
 type Result<T> = std::result::Result<T, crate::Error<std::io::Error>>;
@@ -91,9 +106,7 @@ impl<'a> TerminalInterface<'a> {
                 else {
                     unimplemented!()
                 };
-                Some(Action::Update(
-                    self.key_processor.process_key(keycode, mask),
-                ))
+                Some(self.key_processor.process_key(keycode, mask).into())
             }
         }
     }
@@ -126,7 +139,7 @@ impl<'a> TerminalInterface<'a> {
         Ok(())
     }
 
-    pub fn erase_all_line(&mut self) -> Result<()> {
+    pub fn erase_line_all(&mut self) -> Result<()> {
         self.tty_file.write(b"\x1b[2K")?;
         Ok(())
     }
