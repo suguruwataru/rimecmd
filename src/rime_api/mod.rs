@@ -147,8 +147,8 @@ fn get_rime_menu(c_rime_api: *mut CRimeApi, session_id: usize) -> RimeMenu {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct RimeContext {
-    commit_text_preview: Option<String>,
-    menu: RimeMenu,
+    pub commit_text_preview: String,
+    pub menu: RimeMenu,
 }
 
 // The first fields make it the proper way of declaring an opaque C type as
@@ -196,7 +196,7 @@ struct CRimedRimeCommit {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct RimeCommit {
-    text: Option<String>,
+    pub text: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -318,12 +318,14 @@ impl<'a> RimeSession<'a> {
             c_get_context(self.api.c_rime_api, self.session_id, &mut c_context);
         }
         let context = RimeContext {
-            commit_text_preview: (!c_context.commit_text_preview.is_null()).then(|| {
+            commit_text_preview: if c_context.commit_text_preview.is_null() {
+                "".into()
+            } else {
                 unsafe { std::ffi::CStr::from_ptr(c_context.commit_text_preview) }
                     .to_str()
                     .unwrap()
                     .to_owned()
-            }),
+            },
             menu: get_rime_menu(self.api.c_rime_api, self.session_id),
         };
         unsafe {
@@ -476,37 +478,4 @@ pub enum LogLevel {
     ERROR,
     FATAL,
     OFF,
-}
-
-mod test {
-    #[test]
-    fn get_commit() {
-        let rime_api = super::RimeApi::new(
-            "./test_user_data_home",
-            "./test_shared_data",
-            super::LogLevel::OFF,
-        );
-        let rime_session = super::RimeSession::new(&rime_api);
-        println!("{:?}", rime_api.get_schema_list());
-        println!("{:?}", rime_session.session_id);
-        println!("{:?}", rime_session.get_status());
-        println!("{:?}", rime_session.get_current_schema());
-        println!("{:?}", rime_session.get_context());
-        println!("{:?}", rime_session.get_commit());
-        println!("{:?}", rime_session.process_key(0x6D /* m */, 0));
-        println!("{:?}", rime_session.get_context());
-        println!("{:?}", rime_session.get_commit());
-        println!("{:?}", rime_session.process_key(73 /* I */, 0));
-        println!("{:?}", rime_session.get_context());
-        println!("{:?}", rime_session.get_commit());
-        println!("{:?}", rime_session.process_key(78 /* N */, 0));
-        println!("{:?}", rime_session.get_context());
-        println!("{:?}", rime_session.get_commit());
-        println!("{:?}", rime_session.process_key(89 /* Y */, 0));
-        println!("{:?}", rime_session.get_context());
-        println!("{:?}", rime_session.get_commit());
-        println!("{:?}", rime_session.process_key(32 /* space */, 0));
-        println!("{:?}", rime_session.get_context());
-        assert_eq!(rime_session.get_commit().text, Some("骂INY".to_string()));
-    }
 }

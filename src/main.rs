@@ -4,6 +4,8 @@ use rime_api::RimeApi;
 mod error;
 use error::Error;
 
+mod event_processor;
+
 fn main() {
     let data_home = xdg::BaseDirectories::with_prefix("rimed")
         .map_err(|err| Error::External(err))
