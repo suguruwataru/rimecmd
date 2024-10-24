@@ -28,6 +28,30 @@ impl InputTranslator {
     pub fn translate_input(&self, input: Input) -> Option<RimeKey> {
         match input {
             Input::Etx => unreachable!(),
+            Input::Left => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("Left").unwrap(),
+                mask: 0,
+            }),
+            Input::Right => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("Right").unwrap(),
+                mask: 0,
+            }),
+            Input::Up => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("Up").unwrap(),
+                mask: 0,
+            }),
+            Input::Down => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("Down").unwrap(),
+                mask: 0,
+            }),
+            Input::Home => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("Home").unwrap(),
+                mask: 0,
+            }),
+            Input::End => Some(RimeKey {
+                keycode: *self.rime_key_name_to_key_code_map.get("End").unwrap(),
+                mask: 0,
+            }),
             Input::Delete => Some(RimeKey {
                 keycode: *self.rime_key_name_to_key_code_map.get("Delete").unwrap(),
                 mask: 0,

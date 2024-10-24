@@ -59,6 +59,12 @@ impl ParserStateImpl {
                 _ => ParserStateImpl::Completed(Input::Char(char::from(byte))),
             },
             ParserStateImpl::Esc if byte == 0x5b => ParserStateImpl::Csi,
+            ParserStateImpl::Csi if byte == 0x41 => ParserStateImpl::Completed(Input::Up),
+            ParserStateImpl::Csi if byte == 0x42 => ParserStateImpl::Completed(Input::Down),
+            ParserStateImpl::Csi if byte == 0x43 => ParserStateImpl::Completed(Input::Right),
+            ParserStateImpl::Csi if byte == 0x44 => ParserStateImpl::Completed(Input::Left),
+            ParserStateImpl::Csi if byte == 0x46 => ParserStateImpl::Completed(Input::End),
+            ParserStateImpl::Csi if byte == 0x48 => ParserStateImpl::Completed(Input::Home),
             ParserStateImpl::Csi if byte.is_ascii_digit() => ParserStateImpl::Csi1NumParam(
                 char::from_u32(byte.into()).unwrap().to_digit(10).unwrap() as usize,
             ),
@@ -123,6 +129,54 @@ mod test {
     fn ascii_nul() {
         // The ascii code sent by Ctrl-`
         if let ParserStateImpl::Completed(Input::Nul) = ParserStateImpl::Start.consume_byte(0x00) {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn up() {
+        if let ParserStateImpl::Completed(Input::Up) = ParserStateImpl::Start
+            .consume_byte(0x1b)
+            .consume_byte(0x5b)
+            .consume_byte(0x41)
+        {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn down() {
+        if let ParserStateImpl::Completed(Input::Down) = ParserStateImpl::Start
+            .consume_byte(0x1b)
+            .consume_byte(0x5b)
+            .consume_byte(0x42)
+        {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn right() {
+        if let ParserStateImpl::Completed(Input::Right) = ParserStateImpl::Start
+            .consume_byte(0x1b)
+            .consume_byte(0x5b)
+            .consume_byte(0x43)
+        {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn left() {
+        if let ParserStateImpl::Completed(Input::Left) = ParserStateImpl::Start
+            .consume_byte(0x1b)
+            .consume_byte(0x5b)
+            .consume_byte(0x44)
+        {
         } else {
             panic!();
         }

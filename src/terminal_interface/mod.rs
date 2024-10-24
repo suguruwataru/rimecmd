@@ -8,6 +8,12 @@ mod input_parser;
 mod input_translator;
 
 pub enum Input {
+    Up,
+    Down,
+    Left,
+    Right,
+    Home,
+    End,
     KeypadHome,
     Insert,
     Delete,
