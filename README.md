@@ -4,7 +4,7 @@ This project includes C sources and Rust sources.
 The C sources must be built first.
 [Meson](https://mesonbuild.com/index.html) is used to build the C sources.
 
-When the project is built the first time, Meson needs to build directory
+When the project is built the first time, Meson needs the build directory
 `build/meson` to be setup.
 
 ```
