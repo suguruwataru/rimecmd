@@ -11,17 +11,17 @@ pub struct TerminalMode<'a> {
 }
 
 impl<'a> TerminalMode<'a> {
-    pub async fn main(mut self) -> Result<(), Error> {
+    pub fn main(mut self) -> Result<(), Error> {
         let key_processor = KeyProcessor::new();
-        self.terminal_interface.open().await?;
+        self.terminal_interface.open()?;
         loop {
-            let call = self.terminal_interface.next_call().await?;
+            let call = self.terminal_interface.next_call()?;
             let action = match call {
                 Call::ProcessKey { keycode, mask } => {
                     key_processor.process_key(&self.rime_session, keycode, mask)
                 }
                 Call::Stop => {
-                    self.terminal_interface.close().await?;
+                    self.terminal_interface.close()?;
                     break;
                 }
                 _ => unreachable!(),
@@ -29,20 +29,20 @@ impl<'a> TerminalMode<'a> {
             match action {
                 Effect::CommitString(commit_string) => {
                     if !self.args.continue_mode {
-                        self.terminal_interface.close().await?;
+                        self.terminal_interface.close()?;
                         writeln!(stdout(), "{}", commit_string)?;
                         break;
                     } else {
-                        self.terminal_interface.remove_ui().await?;
+                        self.terminal_interface.remove_ui()?;
                         writeln!(stdout(), "{}", commit_string)?;
-                        self.terminal_interface.setup_ui().await?;
+                        self.terminal_interface.setup_ui()?;
                     }
                 }
                 Effect::UpdateUi {
                     ref menu,
                     ref composition,
                 } => {
-                    self.terminal_interface.update_ui(composition, menu).await?;
+                    self.terminal_interface.update_ui(composition, menu)?;
                 }
             }
         }

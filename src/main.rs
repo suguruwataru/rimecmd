@@ -7,11 +7,14 @@ mod terminal_interface;
 mod terminal_json_mode;
 mod terminal_mode;
 use error::Error;
+type Result<T> = std::result::Result<T, Error>;
+
 use rime_api::{RimeComposition, RimeMenu};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use terminal_json_mode::{JsonStdin, TerminalJsonMode};
 use terminal_mode::TerminalMode;
+mod poll_request;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(
@@ -81,8 +84,7 @@ pub struct Args {
     json_schema: Option<PrintJsonSchemaFor>,
 }
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
     let args = Args::parse();
     match args.json_schema {
         Some(PrintJsonSchemaFor::Request) => {
@@ -113,25 +115,19 @@ async fn main() -> ExitCode {
     let rime_api = rime_api::RimeApi::new(&data_home, "/usr/share/rime-data", args.rime_log_level);
     let rime_session = rime_api::RimeSession::new(&rime_api);
     if args.json && args.tty {
-        let maybe_terminal_interface = terminal_interface::TerminalInterface::new().await;
-        let json_stdin = JsonStdin::new().await;
+        let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
+        let json_stdin = JsonStdin::new();
         return match maybe_terminal_interface {
             Ok(terminal_interface) => {
-                TerminalJsonMode {
-                    args,
-                    terminal_interface,
-                    json_stdin,
-                    rime_session,
-                }
-                .main()
-                .await
-                .unwrap();
+                TerminalJsonMode::new(args, terminal_interface, json_stdin, rime_session)
+                    .main()
+                    .unwrap();
                 ExitCode::SUCCESS
             }
             Err(_) => ExitCode::FAILURE,
         };
     }
-    let maybe_terminal_interface = terminal_interface::TerminalInterface::new().await;
+    let maybe_terminal_interface = terminal_interface::TerminalInterface::new();
     match maybe_terminal_interface {
         Ok(terminal_interface) => {
             TerminalMode {
@@ -140,7 +136,6 @@ async fn main() -> ExitCode {
                 rime_session,
             }
             .main()
-            .await
             .unwrap();
             ExitCode::SUCCESS
         }

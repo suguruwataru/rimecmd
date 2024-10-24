@@ -7,10 +7,10 @@ description = "Use Rime via the command line."
 [dependencies]
 clap = { version = "4.4.11", features = ["derive"] }
 libc = "0.2.150"
+mio = { version = "0.8.10", features = ["os-poll", "os-ext"] }
 schemars = "0.8.16"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
-tokio = { version = "1.35.1", features = ["rt", "io-util", "io-std", "macros", "fs"] }
 uuid = { version = "1.6.1", features = ["v4"] }
 xdg = "2.5.2"
 

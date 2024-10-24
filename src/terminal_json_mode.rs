@@ -1,29 +1,39 @@
 use crate::json_request_processor::{JsonRequestProcessor, Outcome as ReplyResult, Reply, Request};
 use crate::key_processor::KeyProcessor;
+use crate::poll_request::{PollRequest, RequestSource};
 use crate::rime_api::RimeSession;
 use crate::terminal_interface::TerminalInterface;
+use crate::Result;
 use crate::{Args, Call, Effect, Error};
-use std::io::{stdout, Write};
-use tokio::io::AsyncReadExt;
+use std::cell::RefCell;
+use std::io::{stdout, Read, Write};
+use std::os::fd::AsRawFd;
+use std::rc::Rc;
 
 pub struct JsonStdin {
-    stdin: tokio::io::Stdin,
+    stdin: std::io::Stdin,
 }
 
 impl JsonStdin {
-    pub async fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            stdin: tokio::io::stdin(),
+            stdin: std::io::stdin(),
         }
     }
+}
 
-    pub async fn next_request(&mut self) -> Result<Request, Error> {
+impl RequestSource for JsonStdin {
+    fn register(&self, poll_request: &mut PollRequest) -> Result<()> {
+        poll_request.register(&self.stdin.as_raw_fd())
+    }
+
+    fn next_request(&mut self) -> Result<Request> {
         let mut buf = [0u8; 1024];
         let mut json_bytes = vec![];
         loop {
-            let count = self.stdin.read(&mut buf).await?;
+            let count = self.stdin.read(&mut buf)?;
             if count == 0 {
-                break Err(Error::JsonSourceClosed);
+                break Err(Error::InputClosed);
             }
             json_bytes.extend_from_slice(&buf[0..count]);
             match serde_json::from_slice::<Request>(&json_bytes) {
@@ -40,30 +50,45 @@ impl JsonStdin {
 }
 
 pub struct TerminalJsonMode<'a> {
-    pub args: Args,
-    pub terminal_interface: TerminalInterface,
-    pub json_stdin: JsonStdin,
-    pub rime_session: RimeSession<'a>,
+    args: Args,
+    terminal_interface: Rc<RefCell<TerminalInterface>>,
+    json_stdin: Rc<RefCell<JsonStdin>>,
+    rime_session: RimeSession<'a>,
 }
 
-impl TerminalJsonMode<'_> {
-    pub async fn main(&mut self) -> Result<(), Error> {
+impl<'a> TerminalJsonMode<'a> {
+    pub fn new(
+        args: Args,
+        terminal_interface: TerminalInterface,
+        json_stdin: JsonStdin,
+        rime_session: RimeSession<'a>,
+    ) -> Self {
+        Self {
+            args,
+            terminal_interface: Rc::new(RefCell::new(terminal_interface)),
+            json_stdin: Rc::new(RefCell::new(json_stdin)),
+            rime_session,
+        }
+    }
+
+    pub fn main(&mut self) -> Result<()> {
         let json_request_processor = JsonRequestProcessor {
             rime_session: &self.rime_session,
             key_processor: KeyProcessor::new(),
         };
-        self.terminal_interface.open().await?;
+        self.terminal_interface.borrow_mut().open()?;
+        let mut poll_request = PollRequest::new(&[
+            Rc::clone(&self.terminal_interface) as Rc<RefCell<dyn RequestSource>>,
+            Rc::clone(&self.json_stdin) as Rc<RefCell<dyn RequestSource>>,
+        ])?;
         loop {
-            let request = tokio::select! {
-                result = self.terminal_interface.next_call() => result.map(|call| Request { id: uuid::Uuid::new_v4().into(), call: call }),
-                result = self.json_stdin.next_request() => result,
-            };
+            let request = poll_request.poll();
             let reply = match request {
                 Ok(Request {
                     id: _,
                     call: Call::Stop,
                 }) => {
-                    self.terminal_interface.close().await?;
+                    self.terminal_interface.borrow_mut().close()?;
                     break;
                 }
                 Ok(request) => json_request_processor.process_request(request),
@@ -73,7 +98,7 @@ impl TerminalJsonMode<'_> {
                         outcome: err_outcome,
                     },
                     Err(err) => {
-                        self.terminal_interface.close().await?;
+                        self.terminal_interface.borrow_mut().close()?;
                         return Err(err);
                     }
                 },
@@ -84,13 +109,13 @@ impl TerminalJsonMode<'_> {
                     ..
                 } => {
                     if !self.args.continue_mode {
-                        self.terminal_interface.close().await?;
+                        self.terminal_interface.borrow_mut().close()?;
                         writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
                         break;
                     } else {
-                        self.terminal_interface.remove_ui().await?;
+                        self.terminal_interface.borrow_mut().remove_ui()?;
                         writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
-                        self.terminal_interface.setup_ui().await?;
+                        self.terminal_interface.borrow_mut().setup_ui()?;
                     }
                 }
                 Reply {
@@ -102,7 +127,9 @@ impl TerminalJsonMode<'_> {
                     ..
                 } => {
                     writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;
-                    self.terminal_interface.update_ui(composition, menu).await?;
+                    self.terminal_interface
+                        .borrow_mut()
+                        .update_ui(composition, menu)?;
                 }
                 reply => {
                     writeln!(stdout(), "{}", &serde_json::to_string(&reply)?)?;

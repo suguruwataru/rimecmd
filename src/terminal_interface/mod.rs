@@ -1,5 +1,8 @@
+use crate::json_request_processor::Request;
+use crate::poll_request::{PollRequest, RequestSource};
 use crate::rime_api::{RimeComposition, RimeMenu};
 use crate::Call;
+use std::io::{Read, Write};
 /// This module includes that code that interacts with a text terminal
 ///
 /// This module interacts with a terminal using console_codes(4). In
@@ -17,7 +20,6 @@ use crate::Call;
 use std::iter::Iterator;
 use std::num::NonZeroUsize;
 use std::os::fd::AsRawFd;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 mod input_parser;
 mod input_translator;
@@ -56,7 +58,7 @@ pub enum Input {
 }
 
 pub struct TerminalInterface {
-    tty_file: tokio::fs::File,
+    tty_file: std::fs::File,
     original_mode: Option<libc::termios>,
     input_translator: input_translator::InputTranslator,
     input_buffer: Vec<Input>,
@@ -64,15 +66,28 @@ pub struct TerminalInterface {
 
 type Result<T> = std::result::Result<T, crate::Error>;
 
+impl RequestSource for TerminalInterface {
+    fn register(&self, poll_request: &mut PollRequest) -> Result<()> {
+        poll_request.register(&self.tty_file.as_raw_fd())
+    }
+
+    fn next_request(&mut self) -> Result<Request> {
+        let call = self.next_call()?;
+        Ok(Request {
+            id: uuid::Uuid::new_v4().into(),
+            call,
+        })
+    }
+}
+
 impl TerminalInterface {
-    pub async fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self {
             input_buffer: vec![],
-            tty_file: tokio::fs::OpenOptions::new()
+            tty_file: std::fs::OpenOptions::new()
                 .read(true)
                 .write(true)
                 .open("/dev/tty")
-                .await
                 .map_err(|io_err| match io_err.kind() {
                     std::io::ErrorKind::NotFound => crate::Error::NotATerminal,
                     _ => crate::Error::Io(io_err),
@@ -82,11 +97,11 @@ impl TerminalInterface {
         })
     }
 
-    async fn read_input(&mut self) -> Result<Input> {
+    fn read_input(&mut self) -> Result<Input> {
         let mut buf = [0u8; 1];
         let mut input_parser_state = input_parser::ParserState::new();
         loop {
-            self.tty_file.read(&mut buf).await?;
+            self.tty_file.read(&mut buf)?;
             let byte = buf[0];
             match input_parser_state.consume_byte(byte) {
                 input_parser::ConsumeByteResult::Pending(new_state) => {
@@ -97,13 +112,10 @@ impl TerminalInterface {
         }
     }
 
-    async fn set_character_attribute(
-        &mut self,
-        character_attribute: CharacterAttribute,
-    ) -> Result<()> {
+    fn set_character_attribute(&mut self, character_attribute: CharacterAttribute) -> Result<()> {
         match character_attribute {
-            CharacterAttribute::Faint => self.tty_file.write(b"\x1b[2m").await?,
-            CharacterAttribute::Normal => self.tty_file.write(b"\x1b[0m").await?,
+            CharacterAttribute::Faint => self.tty_file.write(b"\x1b[2m")?,
+            CharacterAttribute::Normal => self.tty_file.write(b"\x1b[0m")?,
         };
         Ok(())
     }
@@ -118,34 +130,28 @@ impl TerminalInterface {
     /// This method does not flush the output.
     ///
     /// On success, return the row to place the cursor, using 1-index.
-    async fn draw_menu(&mut self, menu: &crate::rime_api::RimeMenu) -> Result<NonZeroUsize> {
+    fn draw_menu(&mut self, menu: &crate::rime_api::RimeMenu) -> Result<NonZeroUsize> {
         let mut height = 0;
         for (index, candidate) in menu.candidates.iter().enumerate() {
-            self.tty_file.write(b"\r\n").await?;
+            self.tty_file.write(b"\r\n")?;
             if index == menu.highlighted_candidate_index {
                 // The escape code here gives the index inverted color,
                 self.tty_file
-                    .write(format!("\x1b[7m{}.\x1b[0m {}", index + 1, candidate.text).as_bytes())
-                    .await?;
+                    .write(format!("\x1b[7m{}.\x1b[0m {}", index + 1, candidate.text).as_bytes())?;
             } else {
                 self.tty_file
-                    .write(format!("{}. {}", index + 1, candidate.text).as_bytes())
-                    .await?;
+                    .write(format!("{}. {}", index + 1, candidate.text).as_bytes())?;
             }
             if let Some(comment) = candidate.comment.as_ref() {
-                self.set_character_attribute(CharacterAttribute::Faint)
-                    .await?;
-                self.tty_file
-                    .write(format!(" {}", comment).as_bytes())
-                    .await?;
-                self.set_character_attribute(CharacterAttribute::Normal)
-                    .await?;
+                self.set_character_attribute(CharacterAttribute::Faint)?;
+                self.tty_file.write(format!(" {}", comment).as_bytes())?;
+                self.set_character_attribute(CharacterAttribute::Normal)?;
             }
-            self.erase_line_to_right().await?;
+            self.erase_line_to_right()?;
             height = index + 1;
         }
-        self.erase_after().await?;
-        let last_line_row = self.get_cursor_position().await?.0;
+        self.erase_after()?;
+        let last_line_row = self.get_cursor_position()?.0;
         Ok((last_line_row.get() - height)
             .try_into()
             .unwrap_or(NonZeroUsize::new(1).unwrap()))
@@ -156,42 +162,38 @@ impl TerminalInterface {
     ///
     /// On success, return the column to place the cursor, using 1-index, based on wherever Rime
     /// considers the cursor position is.
-    async fn draw_composition(
+    fn draw_composition(
         &mut self,
         composition: &crate::rime_api::RimeComposition,
     ) -> Result<NonZeroUsize> {
-        self.tty_file.write(b"> ").await?;
-        self.set_character_attribute(CharacterAttribute::Faint)
-            .await?;
+        self.tty_file.write(b"> ")?;
+        self.set_character_attribute(CharacterAttribute::Faint)?;
         let mut final_cursor_position = None;
         for (index, byte) in composition.preedit.as_bytes().iter().enumerate() {
             if index == composition.sel_start {
-                self.set_character_attribute(CharacterAttribute::Normal)
-                    .await?;
+                self.set_character_attribute(CharacterAttribute::Normal)?;
             }
             if index == composition.sel_end {
-                self.set_character_attribute(CharacterAttribute::Faint)
-                    .await?;
+                self.set_character_attribute(CharacterAttribute::Faint)?;
             }
             if index == composition.cursor_pos {
-                final_cursor_position = Some(self.get_cursor_position().await?)
+                final_cursor_position = Some(self.get_cursor_position()?)
             }
-            self.tty_file.write(&[*byte]).await?;
+            self.tty_file.write(&[*byte])?;
         }
-        self.set_character_attribute(CharacterAttribute::Normal)
-            .await?;
-        self.erase_line_to_right().await?;
+        self.set_character_attribute(CharacterAttribute::Normal)?;
+        self.erase_line_to_right()?;
         Ok(if let Some(final_cursor_position) = final_cursor_position {
             final_cursor_position.1
         } else {
-            self.get_cursor_position().await?.1
+            self.get_cursor_position()?.1
         })
     }
 
-    async fn get_cursor_position(&mut self) -> Result<(NonZeroUsize, NonZeroUsize)> {
-        self.tty_file.write(b"\x1b[6n").await?;
+    fn get_cursor_position(&mut self) -> Result<(NonZeroUsize, NonZeroUsize)> {
+        self.tty_file.write(b"\x1b[6n")?;
         loop {
-            let input = self.read_input().await?;
+            let input = self.read_input()?;
             if let Input::CursorPositionReport { row, col } = input {
                 break Ok((row, col));
             } else {
@@ -200,26 +202,22 @@ impl TerminalInterface {
         }
     }
 
-    async fn set_cursor_position(
-        &mut self,
-        (row, col): (NonZeroUsize, NonZeroUsize),
-    ) -> Result<()> {
+    fn set_cursor_position(&mut self, (row, col): (NonZeroUsize, NonZeroUsize)) -> Result<()> {
         self.tty_file
-            .write(format!("\x1b[{};{}H", row, col).as_bytes())
-            .await?;
+            .write(format!("\x1b[{};{}H", row, col).as_bytes())?;
         Ok(())
     }
 
-    pub async fn open(&mut self) -> Result<()> {
+    pub fn open(&mut self) -> Result<()> {
         self.enter_raw_mode()?;
-        self.setup_ui().await?;
+        self.setup_ui()?;
         Ok(())
     }
 
-    pub async fn next_call(&mut self) -> Result<Call> {
+    pub fn next_call(&mut self) -> Result<Call> {
         let input = match self.input_buffer.pop() {
             Some(input) => input,
-            None => self.read_input().await?,
+            None => self.read_input()?,
         };
         match input {
             Input::Etx | Input::Eot => Ok(Call::Stop),
@@ -234,37 +232,32 @@ impl TerminalInterface {
         }
     }
 
-    pub async fn update_ui(
-        &mut self,
-        composition: &RimeComposition,
-        menu: &RimeMenu,
-    ) -> Result<()> {
-        self.carriage_return().await?;
-        let final_cursor_col = self.draw_composition(composition).await?;
-        let final_cursor_row = self.draw_menu(menu).await?;
-        self.set_cursor_position((final_cursor_row, final_cursor_col))
-            .await?;
-        self.tty_file.flush().await?;
+    pub fn update_ui(&mut self, composition: &RimeComposition, menu: &RimeMenu) -> Result<()> {
+        self.carriage_return()?;
+        let final_cursor_col = self.draw_composition(composition)?;
+        let final_cursor_row = self.draw_menu(menu)?;
+        self.set_cursor_position((final_cursor_row, final_cursor_col))?;
+        self.tty_file.flush()?;
         Ok(())
     }
 
-    pub async fn setup_ui(&mut self) -> Result<()> {
-        self.carriage_return().await?;
-        self.tty_file.write(b"> ").await?;
-        self.erase_after().await?;
-        self.tty_file.flush().await?;
+    pub fn setup_ui(&mut self) -> Result<()> {
+        self.carriage_return()?;
+        self.tty_file.write(b"> ")?;
+        self.erase_after()?;
+        self.tty_file.flush()?;
         Ok(())
     }
 
-    pub async fn remove_ui(&mut self) -> Result<()> {
-        self.carriage_return().await?;
-        self.erase_after().await?;
-        self.tty_file.flush().await?;
+    pub fn remove_ui(&mut self) -> Result<()> {
+        self.carriage_return()?;
+        self.erase_after()?;
+        self.tty_file.flush()?;
         Ok(())
     }
 
-    pub async fn close(&mut self) -> Result<()> {
-        self.remove_ui().await?;
+    pub fn close(&mut self) -> Result<()> {
+        self.remove_ui()?;
         self.exit_raw_mode()?;
         Ok(())
     }
@@ -285,18 +278,18 @@ impl TerminalInterface {
         Ok(())
     }
 
-    async fn carriage_return(&mut self) -> Result<()> {
-        self.tty_file.write(b"\r").await?;
+    fn carriage_return(&mut self) -> Result<()> {
+        self.tty_file.write(b"\r")?;
         Ok(())
     }
 
-    async fn erase_line_to_right(&mut self) -> Result<()> {
-        self.tty_file.write(b"\x1b[0K").await?;
+    fn erase_line_to_right(&mut self) -> Result<()> {
+        self.tty_file.write(b"\x1b[0K")?;
         Ok(())
     }
 
-    async fn erase_after(&mut self) -> Result<()> {
-        self.tty_file.write(b"\x1b[0J").await?;
+    fn erase_after(&mut self) -> Result<()> {
+        self.tty_file.write(b"\x1b[0J")?;
         Ok(())
     }
 
