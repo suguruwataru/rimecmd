@@ -483,7 +483,7 @@ mod test {
     fn get_commit() {
         let rime_api = super::RimeApi::new(
             "./test_user_data_home",
-            "/usr/share/rime-data",
+            "./test_shared_data",
             super::LogLevel::OFF,
         );
         let rime_session = super::RimeSession::new(&rime_api);
@@ -507,6 +507,6 @@ mod test {
         println!("{:?}", rime_session.get_commit());
         println!("{:?}", rime_session.process_key(32 /* space */, 0));
         println!("{:?}", rime_session.get_context());
-        assert_eq!(rime_session.get_commit().text, Some("沒INY".to_string()));
+        assert_eq!(rime_session.get_commit().text, Some("骂INY".to_string()));
     }
 }

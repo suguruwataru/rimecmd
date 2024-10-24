@@ -9,7 +9,6 @@ RimeApi *c_create_rime_api(const char *user_data_dir,
   rime_traits.min_log_level = log_level;
   rime_traits.app_name = "rime.rimed";
   rime_traits.user_data_dir = user_data_dir;
-  puts(user_data_dir);
   rime_traits.shared_data_dir = shared_data_dir;
   RimeApi *rime_api = rime_get_api();
   rime_api->setup(&rime_traits);
@@ -19,7 +18,6 @@ RimeApi *c_create_rime_api(const char *user_data_dir,
   // where it applies fs changes to the user data home directory.
   if (rime_api->start_maintenance(True)) {
     rime_api->join_maintenance_thread();
-    rime_api->deploy_config_file("fcitx5.yaml", "config_version");
   }
   return rime_api;
 }
