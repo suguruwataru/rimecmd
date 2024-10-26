@@ -330,11 +330,7 @@ fn rimecmd() -> Result<()> {
 fn main() -> ExitCode {
     match rimecmd() {
         Ok(_) => ExitCode::SUCCESS,
-        Err(err @ Error::OneOfMultipleInputClosed) => {
-            eprintln!("{:?}", err);
-            ExitCode::from(2)
-        }
-        Err(Error::UnixSocketAlreadyExists) => {
+        Err(error @ Error::UnixSocketAlreadyExists) => {
             eprintln!(
                 "When the server tries to create a unix socket to listen to, \
                 it finds that there already exists one."
@@ -347,11 +343,11 @@ fn main() -> ExitCode {
             eprintln!(
                 "This will remove the already existing unix socket and then start the server."
             );
-            ExitCode::from(22)
+            error.into()
         }
-        Err(err) => {
-            eprintln!("{:?}", err);
-            ExitCode::FAILURE
+        Err(error) => {
+            eprintln!("{:?}", error);
+            error.into()
         }
     }
 }

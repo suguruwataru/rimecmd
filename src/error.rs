@@ -15,6 +15,19 @@ pub enum Error {
     NulInCString(std::ffi::NulError),
 }
 
+impl From<Error> for std::process::ExitCode {
+    fn from(error: Error) -> Self {
+        use Error::*;
+        match error {
+            OneOfMultipleInputClosed => Self::from(2),
+            UnsupportedInput => Self::from(3),
+            UnixSocketAlreadyExists => Self::from(4),
+            MoreThanOneClient => Self::from(5),
+            _ => Self::FAILURE,
+        }
+    }
+}
+
 impl From<std::io::Error> for crate::Error {
     fn from(source: std::io::Error) -> Self {
         Self::Io(source)
