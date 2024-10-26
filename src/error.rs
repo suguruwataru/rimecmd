@@ -15,8 +15,8 @@ pub enum Error {
     NulInCString(std::ffi::NulError),
 }
 
-impl From<Error> for std::process::ExitCode {
-    fn from(error: Error) -> Self {
+impl From<&Error> for std::process::ExitCode {
+    fn from(error: &Error) -> Self {
         use Error::*;
         match error {
             OneOfMultipleInputClosed => Self::from(2),
@@ -25,6 +25,12 @@ impl From<Error> for std::process::ExitCode {
             MoreThanOneClient => Self::from(5),
             _ => Self::FAILURE,
         }
+    }
+}
+
+impl From<Error> for std::process::ExitCode {
+    fn from(error: Error) -> Self {
+        (&error).into()
     }
 }
 

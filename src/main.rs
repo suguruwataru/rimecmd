@@ -140,13 +140,16 @@ pub struct Args {
     /// Normally, a user won't need to use this flag. When a client runs, if it can't
     /// find a server to connect to, it automatically starts the server.
     ///
-    /// All other arguments, except for `unix_socket` is ignored when this is used.
+    /// All other arguments, except for `unix_socket` are ignored when this is used.
     server: bool,
     /// Print the configuration used by `rimecmd` and exit.
     ///
     /// The output is in JSON format.
     #[arg(long, exclusive = true)]
     print_config: bool,
+    #[arg(long, exclusive = true)]
+    /// Print the exit codes on error and exit.
+    print_error_codes: bool,
     #[arg(long, short = 'f')]
     /// Start server even if the unix socket already exists.
     ///
@@ -199,6 +202,19 @@ fn print_config(config: Config) -> Result<()> {
     Ok(())
 }
 
+fn print_error_codes() -> Result<()> {
+    use Error::*;
+    for error in [
+        OneOfMultipleInputClosed,
+        UnsupportedInput,
+        UnixSocketAlreadyExists,
+        MoreThanOneClient,
+    ] {
+        println!("{:?} {:?}", ExitCode::from(&error), error);
+    }
+    Ok(())
+}
+
 fn print_json_schema(json_schema: PrintJsonSchemaFor) -> Result<()> {
     match json_schema {
         PrintJsonSchemaFor::Request => {
@@ -246,6 +262,9 @@ fn rimecmd() -> Result<()> {
     let config = Config::try_from(&args)?;
     if args.print_config {
         return print_config(config);
+    }
+    if args.print_error_codes {
+        return print_error_codes();
     }
     if args.server {
         let unix_listener = match UnixListener::bind(&config.unix_socket) {
