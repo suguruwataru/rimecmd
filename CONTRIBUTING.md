@@ -1,3 +1,6 @@
+在`git commit`之前，应当先`git config core.hooksPath githooks`。`githooks`目录
+里有一个用于`commit`之前的检查的脚本，可以保证`commit`进来的代码满足一定的要求。
+
 rimecmd基本上是用Rust语言写的，可以使用标准的
 ```
 cargo build
