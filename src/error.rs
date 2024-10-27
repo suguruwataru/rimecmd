@@ -18,6 +18,8 @@ pub enum Error {
 impl From<&Error> for std::process::ExitCode {
     fn from(error: &Error) -> Self {
         use Error::*;
+        // NOTE: when changing this, also change how
+        // the --print-error-codes flag is used.
         match error {
             OneOfMultipleInputClosed => Self::from(2),
             UnsupportedInput => Self::from(3),

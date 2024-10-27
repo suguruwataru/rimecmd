@@ -203,6 +203,8 @@ fn print_config(config: Config) -> Result<()> {
 }
 
 fn print_error_codes() -> Result<()> {
+    // NOTE: when changing this, check the `From<&Error>` impl for
+    // `std::process::ExitCode`.
     use Error::*;
     for error in [
         OneOfMultipleInputClosed,
