@@ -168,6 +168,20 @@ pub struct Args {
     /// Stop the server and exit.
     #[arg(long, exclusive = true)]
     stop_server: bool,
+    #[arg(long, short)]
+    /// User data directorty to use.
+    ///
+    /// This is the directory that Rime uses to hold user configuration and
+    /// runtime data. This is the directory that holds `default.custom.yaml`
+    /// which is usually used for configuration.
+    ///
+    /// rimecmd uses its own user data directory by default. The specific
+    /// directory can be seen using `--print-config`.
+    ///
+    /// Note that a running server's user data directory cannot be changed,
+    /// so this is ignored unless a new server is being started by the command
+    /// invocation with this argument.
+    user_data_directory: Option<PathBuf>,
 }
 
 #[derive(Clone, Serialize)]
@@ -193,7 +207,13 @@ impl TryFrom<&Args> for Config {
         };
         Ok(Self {
             unix_socket,
-            user_data_directory: xdg_directories.get_data_home().into(),
+            user_data_directory: if args.server || args.force_start_server {
+                args.user_data_directory.clone()
+            } else {
+                None
+            }
+            .or(Some(xdg_directories.get_data_home().into()))
+            .unwrap(),
             rime_log_level: args.rime_log_level,
         })
     }
