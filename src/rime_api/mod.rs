@@ -83,6 +83,7 @@ extern "C" {
         rime_api: *mut CRimeApi,
         iterator: *mut CRimeCandidateListIterator,
     ) -> c_void;
+    fn c_clear_composition(rime_api: *mut CRimeApi, session_id: usize) -> c_void;
     fn RimeConfigOpen(config_id: *const c_char, config: *mut RimeConfig) -> c_int;
     fn RimeConfigClose(config: *mut RimeConfig) -> c_int;
     fn RimeConfigGetInt(config: *mut RimeConfig, key: *const c_char, value: *mut c_int) -> c_int;
@@ -519,6 +520,11 @@ impl RimeSession {
         }
         status
     }
+
+    pub fn clear_composition(&self) {
+        let api = self.api.lock().unwrap();
+        unsafe { c_clear_composition(api.c_rime_api, self.session_id) };
+    }
 }
 
 impl Drop for RimeSession {
@@ -742,5 +748,23 @@ mod test {
         );
         let mut rime_config = rime_api.open_config("default").unwrap();
         assert_eq!(5, rime_config.get::<isize>("menu/page_size").unwrap());
+    }
+
+    #[test]
+    #[ignore = "not thread safe"]
+    fn clear_composition() {
+        let rime_api = crate::rime_api::RimeApi::new(
+            temporary_directory_path(),
+            "./test_shared_data",
+            LOG_LEVEL,
+        );
+        let rime_session = crate::rime_api::RimeSession::new(Arc::new(Mutex::new(rime_api)));
+        rime_session.process_key(109 /* m */, 0);
+        rime_session.process_key(110 /* n */, 0);
+        rime_session.process_key(111 /* o */, 0);
+        rime_session.clear_composition();
+        assert_eq!("", rime_session.get_context().composition.preedit);
+        assert_eq!(0, rime_session.get_context().menu.candidates.len());
+        assert_eq!(0, rime_session.get_context().menu.page_no);
     }
 }

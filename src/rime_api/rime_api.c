@@ -1,3 +1,5 @@
+/// Wrap Rime's C API to be more compatible with Rust's FFI.
+
 #include <rime_api.h>
 #include <stdlib.h>
 #include <string.h>
@@ -167,4 +169,8 @@ Bool c_candidate_list_next(RimeApi *rime_api,
 void c_candidate_list_end(RimeApi *rime_api,
                           RimeCandidateListIterator *iterator) {
   rime_api->candidate_list_end(iterator);
+}
+
+void c_clear_composition(RimeApi *rime_api, RimeSessionId session_id) {
+  rime_api->clear_composition(session_id);
 }

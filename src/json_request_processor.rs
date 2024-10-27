@@ -121,6 +121,13 @@ impl JsonRequestProcessor<'_> {
                 id: Some(id),
                 outcome: Outcome::Effect(Effect::StopServer),
             },
+            Call::ClearComposition => Reply {
+                id: Some(id),
+                outcome: {
+                    self.rime_session.clear_composition();
+                    Outcome::Effect(Effect::ClearComposition)
+                },
+            },
         }
     }
 }

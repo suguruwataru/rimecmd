@@ -45,6 +45,7 @@ pub enum Call {
     StopClient,
     StopServer,
     SchemaName,
+    ClearComposition,
     ConfigValueInteger {
         config_id: String,
         option_key: String,
@@ -60,6 +61,7 @@ pub enum Call {
 pub enum Effect {
     StopClient,
     StopServer,
+    ClearComposition,
     CommitString(String),
     RawKeyEvent {
         keycode: usize,
