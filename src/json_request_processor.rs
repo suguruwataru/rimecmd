@@ -125,7 +125,11 @@ impl JsonRequestProcessor<'_> {
                 id: Some(id),
                 outcome: {
                     self.rime_session.clear_composition();
-                    Outcome::Effect(Effect::ClearComposition)
+                    let context = self.rime_session.get_context();
+                    Outcome::Effect(Effect::UpdateUi {
+                        composition: context.composition,
+                        menu: context.menu,
+                    })
                 },
             },
         }
