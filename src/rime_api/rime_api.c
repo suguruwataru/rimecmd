@@ -174,3 +174,17 @@ void c_candidate_list_end(RimeApi *rime_api,
 void c_clear_composition(RimeApi *rime_api, RimeSessionId session_id) {
   rime_api->clear_composition(session_id);
 }
+
+void c_rime_config_open(RimeApi *rime_api, const char *config_id,
+                        RimeConfig *config) {
+  rime_api->config_open(config_id, config);
+}
+
+void c_rime_config_close(RimeApi *rime_api, RimeConfig *config) {
+  rime_api->config_close(config);
+}
+
+void c_rime_config_get_int(RimeApi *rime_api, RimeConfig *config,
+                           const char *key, int *value) {
+  rime_api->config_get_int(config, key, value);
+}

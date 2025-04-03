@@ -84,14 +84,28 @@ extern "C" {
         iterator: *mut CRimeCandidateListIterator,
     ) -> c_void;
     fn c_clear_composition(rime_api: *mut CRimeApi, session_id: usize) -> c_void;
-    fn RimeConfigOpen(config_id: *const c_char, config: *mut RimeConfig) -> c_int;
-    fn RimeConfigClose(config: *mut RimeConfig) -> c_int;
-    fn RimeConfigGetInt(config: *mut RimeConfig, key: *const c_char, value: *mut c_int) -> c_int;
+    fn c_rime_config_open(
+        rime_api: *mut CRimeApi,
+        config_id: *const c_char,
+        config: *mut CRimeConfig,
+    ) -> c_int;
+    fn c_rime_config_close(rime_api: *mut CRimeApi, config: *mut CRimeConfig) -> c_int;
+    fn c_rime_config_get_int(
+        rime_api: *mut CRimeApi,
+        config: *mut CRimeConfig,
+        key: *const c_char,
+        value: *mut c_int,
+    ) -> c_int;
 }
 
 #[repr(C)]
-pub struct RimeConfig {
+struct CRimeConfig {
     ptr: *mut c_void,
+}
+
+pub struct RimeConfig {
+    c: CRimeConfig,
+    rime_api: Arc<Mutex<RimeApi>>,
 }
 
 pub trait RimeConfigValue
@@ -105,7 +119,16 @@ impl RimeConfigValue for isize {
     fn load(config: &mut RimeConfig, key: impl AsRef<str>) -> Option<Self> {
         let mut mem: c_int = 0;
         let key = CString::new(key.as_ref()).unwrap();
-        if 0 == unsafe { RimeConfigGetInt(config as *mut RimeConfig, key.as_ptr(), &mut mem) } {
+        let c_rime_api = config.rime_api.lock().unwrap().c_rime_api;
+        let c_config = &mut config.c;
+        if 0 == unsafe {
+            c_rime_config_get_int(
+                c_rime_api,
+                c_config as *mut CRimeConfig,
+                key.as_ptr(),
+                &mut mem,
+            )
+        } {
             None
         } else {
             Some(mem as isize)
@@ -125,8 +148,10 @@ impl Drop for RimeConfig {
         // in point is nullptr or points to an uninitialized structure.
         // It's impossible with the Rust setup written here.
         // Therefore, the return value can be safely disgarded here.
+        let c_rime_api = self.rime_api.lock().unwrap().c_rime_api;
+        let c_rime_config = &mut self.c;
         unsafe {
-            RimeConfigClose(self as *mut RimeConfig);
+            c_rime_config_close(c_rime_api, c_rime_config as *mut CRimeConfig);
         }
     }
 }
@@ -375,8 +400,7 @@ impl RimeSession {
         config_id: impl AsRef<str>,
         option_key: impl AsRef<str>,
     ) -> Result<V> {
-        let lock = self.api.lock().unwrap();
-        let Some(mut config) = lock.open_config(config_id.as_ref()) else {
+        let Some(mut config) = self.open_config(config_id.as_ref()) else {
             return Err(Error::ConfigNotFound(config_id.as_ref().into()));
         };
         let Some(option_value) = config.get(option_key.as_ref()) else {
@@ -525,6 +549,28 @@ impl RimeSession {
         let api = self.api.lock().unwrap();
         unsafe { c_clear_composition(api.c_rime_api, self.session_id) };
     }
+
+    pub fn open_config(&self, config_id: impl AsRef<str>) -> Option<RimeConfig> {
+        let mut c_config = CRimeConfig {
+            ptr: std::ptr::null_mut(),
+        };
+        let config_id = CString::new(config_id.as_ref()).unwrap();
+        let c_rime_api = self.api.lock().unwrap().c_rime_api;
+        if 0 == unsafe {
+            c_rime_config_open(
+                c_rime_api,
+                config_id.as_ptr(),
+                &mut c_config as *mut CRimeConfig,
+            )
+        } {
+            None
+        } else {
+            Some(RimeConfig {
+                rime_api: Arc::clone(&self.api),
+                c: c_config,
+            })
+        }
+    }
 }
 
 impl Drop for RimeSession {
@@ -644,18 +690,6 @@ impl RimeApi {
                 .unwrap(),
         )
     }
-
-    pub fn open_config(&self, config_id: impl AsRef<str>) -> Option<RimeConfig> {
-        let mut config = RimeConfig {
-            ptr: std::ptr::null_mut(),
-        };
-        let config_id = CString::new(config_id.as_ref()).unwrap();
-        if 0 == unsafe { RimeConfigOpen(config_id.as_ptr(), &mut config as *mut RimeConfig) } {
-            None
-        } else {
-            Some(config)
-        }
-    }
 }
 
 #[derive(Copy, Clone, clap::ValueEnum, Serialize)]
@@ -746,7 +780,8 @@ mod test {
             "./test_shared_data",
             LOG_LEVEL,
         );
-        let mut rime_config = rime_api.open_config("default").unwrap();
+        let rime_session = crate::rime_api::RimeSession::new(Arc::new(Mutex::new(rime_api)));
+        let mut rime_config = rime_session.open_config("default").unwrap();
         assert_eq!(5, rime_config.get::<isize>("menu/page_size").unwrap());
     }
 
