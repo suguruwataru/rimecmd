@@ -121,14 +121,7 @@ impl RimeConfigValue for isize {
         let key = CString::new(key.as_ref()).unwrap();
         let c_rime_api = config.rime_api.lock().unwrap().c_rime_api;
         let c_config = &mut config.c;
-        if 0 == unsafe {
-            c_rime_config_get_int(
-                c_rime_api,
-                c_config as *mut CRimeConfig,
-                key.as_ptr(),
-                &mut mem,
-            )
-        } {
+        if 0 == unsafe { c_rime_config_get_int(c_rime_api, c_config, key.as_ptr(), &mut mem) } {
             None
         } else {
             Some(mem as isize)
@@ -556,13 +549,7 @@ impl RimeSession {
         };
         let config_id = CString::new(config_id.as_ref()).unwrap();
         let c_rime_api = self.api.lock().unwrap().c_rime_api;
-        if 0 == unsafe {
-            c_rime_config_open(
-                c_rime_api,
-                config_id.as_ptr(),
-                &mut c_config as *mut CRimeConfig,
-            )
-        } {
+        if 0 == unsafe { c_rime_config_open(c_rime_api, config_id.as_ptr(), &mut c_config) } {
             None
         } else {
             Some(RimeConfig {
